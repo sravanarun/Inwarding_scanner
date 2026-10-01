@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pending Stock Inspection & Catalogue</title>
+  
+  <!-- SheetJS for Excel Parsing/Export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- jsPDF & AutoTable for PDF Generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.3/dist/jspdf.plugin.autotable.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #090e1a;
+      --card-bg: #131c2e;
+      --panel-bg: #0f172a;
+      --border: #22324e;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
+      --accent: #10b981;
+      --danger: #ef4444;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); color: var(--text); margin: 0; padding: 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+
+    /* Header */
+    .header { width: 100%; max-width: 1050px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+    .header h2 { margin: 0; font-size: 1.5rem; color: var(--primary); }
+    
+    .download-actions { display: flex; gap: 8px; }
+    .btn-download { border: none; padding: 8px 14px; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; gap: 5px; color: #fff; }
+    .btn-excel { background: #16a34a; }
+    .btn-excel:hover { background: #15803d; }
+    .btn-pdf { background: #2563eb; }
+    .btn-pdf:hover { background: #1d4ed8; }
+
+    /* File Input */
+    .file-box { width: 100%; max-width: 1050px; background: var(--panel-bg); padding: 12px; border-radius: 8px; border: 1px dashed var(--primary); text-align: center; margin-bottom: 12px; }
+    .file-box label { font-size: 0.9rem; color: var(--primary); cursor: pointer; display: block; font-weight: 600; }
+    .file-box input { display: none; }
+
+    /* Filter Panel */
+    .control-panel { width: 100%; max-width: 1050px; background: var(--panel-bg); padding: 14px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; width: 100%; }
+    .filter-box { display: flex; flex-direction: column; gap: 4px; position: relative; }
+    .filter-label { font-size: 0.68rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+
+    .search-input { background: #090e1a; border: 1px solid var(--border); color: #fff; padding: 8px 10px; border-radius: 6px; font-size: 0.8rem; outline: none; width: 100%; }
+    .search-input:focus { border-color: var(--primary); }
+
+    .dropdown-btn { background: #090e1a; color: var(--text); border: 1px solid var(--border); padding: 8px 10px; border-radius: 6px; font-size: 0.8rem; text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dropdown-btn:hover { border-color: var(--primary); }
+    .dropdown-btn::after { content: "▾"; font-size: 0.75rem; margin-left: 6px; color: var(--text-muted); }
+
+    .dropdown-menu { display: none; position: absolute; top: calc(100% + 4px); left: 0; min-width: 240px; max-height: 300px; background: #0b1324; border: 1px solid var(--border); border-radius: 8px; z-index: 1000; flex-direction: column; padding: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
+    .dropdown-menu.show { display: flex; }
+    
+    .dropdown-toolbar { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    .select-all-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: var(--primary); cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+    .select-all-row:hover { background: #1e293b; }
+    .dropdown-search { background: #090e1a; border: 1px solid var(--border); color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 0.76rem; outline: none; }
+    .dropdown-list { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; max-height: 180px; }
+    .dropdown-item { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; cursor: pointer; padding: 4px 6px; border-radius: 4px; }
+    .dropdown-item:hover { background: #1e293b; }
+
+    .weight-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .weight-row select, .weight-row input { background: #090e1a; border: 1px solid var(--border); color: var(--text); padding: 6px 8px; border-radius: 6px; font-size: 0.8rem; outline: none; }
+    .weight-row select { width: 140px; }
+    .weight-row input { width: 80px; }
+
+    /* Stats bar */
+    .stats-bar { width: 100%; max-width: 1050px; display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 9px 14px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 12px; font-size: 0.82rem; color: var(--text-muted); flex-wrap: wrap; gap: 8px; }
+    .stats-bar b { color: var(--primary); }
+
+    /* Main Inspection Card */
+    .card-container { width: 100%; max-width: 1050px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 16px; min-height: 480px; justify-content: center; }
+    
+    .product-layout { display: flex; gap: 30px; align-items: center; }
+    
+    /* Image Section */
+    .img-wrapper { 
+      width: 450px; 
+      height: 450px; 
+      min-width: 450px; 
+      background: #ffffff; 
+      border-radius: 12px; 
+      overflow: hidden; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      border: 2px solid var(--border); 
+      position: relative; 
+      cursor: zoom-in;
+    }
+    .img-wrapper img { width: 100%; height: 100%; object-fit: contain; }
+    .zoom-hint { position: absolute; bottom: 10px; right: 10px; background: rgba(9, 14, 26, 0.75); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; pointer-events: none; border: 1px solid var(--border); }
+    .img-fallback { color: #64748b; font-size: 0.85rem; text-align: center; display: none; padding: 20px; }
+
+    /* Details Section */
+    .details-right { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: left; }
+    
+    .variant-title { font-size: 2rem; font-weight: 800; color: #fff; margin: 0 0 6px 0; font-family: monospace; letter-spacing: 0.5px; }
+    .lot-text { font-size: 1.15rem; color: #cbd5e1; margin-bottom: 22px; font-family: monospace; }
+    
+    /* Weight prominently styled */
+    .weight-box { 
+      display: inline-block; 
+      background: #0f172a; 
+      border: 1px solid #38bdf8; 
+      border-radius: 8px; 
+      padding: 12px 18px; 
+      margin-bottom: 24px; 
+      box-shadow: 0 4px 15px rgba(56, 189, 248, 0.12);
+    }
+    .weight-val { font-size: 2.8rem; font-weight: 900; color: #38bdf8; line-height: 1; }
+    .weight-unit { font-size: 1.2rem; font-weight: 700; color: #94a3b8; margin-left: 4px; }
+    
+    /* Category and Group: Neutral, plain, no extra bold */
+    .meta-group { display: flex; flex-direction: column; gap: 8px; font-size: 1rem; color: #94a3b8; font-weight: 400; }
+    .meta-item { display: flex; align-items: baseline; gap: 8px; }
+    .meta-label { color: #64748b; width: 85px; font-size: 0.95rem; }
+    .meta-value { color: #cbd5e1; }
+
+    /* Empty state */
+    .empty-state { text-align: center; color: var(--text-muted); padding: 60px 20px; font-size: 1.1rem; }
+
+    /* Sticky Bottom Actions */
+    .actions-bar { 
+      position: sticky; 
+      bottom: 0; 
+      width: 100%; 
+      max-width: 1050px; 
+      background: rgba(15, 23, 42, 0.95); 
+      backdrop-filter: blur(8px); 
+      border: 1px solid var(--border); 
+      border-radius: 10px; 
+      padding: 12px 16px; 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      margin-top: 12px; 
+      box-shadow: 0 -8px 25px rgba(0,0,0,0.5); 
+      z-index: 500; 
+    }
+    .btn-nav { background: #1e293b; color: #fff; border: 1px solid var(--border); padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.9rem; }
+    .btn-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+    
+    .confirm-checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+      background: #1e293b;
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .confirm-checkbox-label input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent); }
+
+    /* Lightbox Modal */
+    .lightbox-modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(4, 7, 15, 0.94);
+      backdrop-filter: blur(10px);
+      z-index: 10000;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .lightbox-modal.active { display: flex; }
+    .lightbox-box { width: 100%; max-width: 750px; height: calc(100vh - 120px); max-height: 750px; background: #fff; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative; }
+    .lightbox-box img { width: 100%; height: 100%; object-fit: contain; }
+    .lightbox-close { position: absolute; top: 16px; right: 20px; background: #1e293b; color: #fff; border: 1px solid var(--border); width: 40px; height: 40px; border-radius: 50%; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+    @media (max-width: 860px) {
+      .product-layout { flex-direction: column; }
+      .img-wrapper { width: 100%; max-width: 380px; height: 380px; min-width: 0; }
+      .details-right { text-align: center; align-items: center; }
+      .meta-item { justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h2>Pending Stock Catalogue</h2>
+    <div class="download-actions">
+      <button class="btn-download btn-excel" onclick="exportSelectedExcel()">📥 Download Excel (<span id="excelSelCount">0</span>)</button>
+      <button class="btn-download btn-pdf" onclick="exportSelectedPDF()">📄 Download PDF</button>
+    </div>
+  </div>
+
+  <div class="file-box">
+    <label for="excelInput">📂 Click here to load raw Excel file (Product_receipt.xlsx)</label>
+    <input type="file" id="excelInput" accept=".xlsx, .xls">
+  </div>
+
+  <!-- Filter & Search Controls -->
+  <div class="control-panel">
+    <div class="filter-grid">
+      <!-- Universal Live Search -->
+      <div class="filter-box">
+        <span class="filter-label">Search (Variant, Lot, STN...)</span>
+        <input type="text" class="search-input" id="universalSearch" placeholder="Type keyword..." oninput="applyFilters()">
+      </div>
+
+      <!-- Category Filter -->
+      <div class="filter-box" id="fb-cat">
+        <span class="filter-label">Category</span>
+        <button class="dropdown-btn" onclick="toggleDropdown('cat')">All Categories</button>
+        <div class="dropdown-menu" id="menu-cat">
+          <div class="dropdown-toolbar">
+            <div class="select-all-row" onclick="toggleSelectAllDropdown('cat')">
+              <span>Select All</span>
+              <small id="lbl-all-cat">0 / 0</small>
+            </div>
+            <input type="text" class="dropdown-search" placeholder="Search..." oninput="filterChecklist('cat', this.value)">
+          </div>
+          <div class="dropdown-list" id="list-cat"></div>
+        </div>
+      </div>
+
+      <!-- Group Filter -->
+      <div class="filter-box" id="fb-grp">
+        <span class="filter-label">Group</span>
+        <button class="dropdown-btn" onclick="toggleDropdown('grp')">All Groups</button>
+        <div class="dropdown-menu" id="menu-grp">
+          <div class="dropdown-toolbar">
+            <div class="select-all-row" onclick="toggleSelectAllDropdown('grp')">
+              <span>Select All</span>
+              <small id="lbl-all-grp">0 / 0</small>
+            </div>
+            <input type="text" class="dropdown-search" placeholder="Search..." oninput="filterChecklist('grp', this.value)">
+          </div>
+          <div class="dropdown-list" id="list-grp"></div>
+        </div>
+      </div>
+
+      <!-- STN No Filter -->
+      <div class="filter-box" id="fb-stn">
+        <span class="filter-label">STN No</span>
+        <button class="dropdown-btn" onclick="toggleDropdown('stn')">All STNs</button>
+        <div class="dropdown-menu" id="menu-stn">
+          <div class="dropdown-toolbar">
+            <div class="select-all-row" onclick="toggleSelectAllDropdown('stn')">
+              <span>Select All</span>
+              <small id="lbl-all-stn">0 / 0</small>
+            </div>
+            <input type="text" class="dropdown-search" placeholder="Search..." oninput="filterChecklist('stn', this.value)">
+          </div>
+          <div class="dropdown-list" id="list-stn"></div>
+        </div>
+      </div>
+
+      <!-- Location Filter -->
+      <div class="filter-box" id="fb-loc">
+        <span class="filter-label">Location</span>
+        <button class="dropdown-btn" onclick="toggleDropdown('loc')">All Locations</button>
+        <div class="dropdown-menu" id="menu-loc">
+          <div class="dropdown-toolbar">
+            <div class="select-all-row" onclick="toggleSelectAllDropdown('loc')">
+              <span>Select All</span>
+              <small id="lbl-all-loc">0 / 0</small>
+            </div>
+            <input type="text" class="dropdown-search" placeholder="Search..." oninput="filterChecklist('loc', this.value)">
+          </div>
+          <div class="dropdown-list" id="list-loc"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Weight Filter Row -->
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--border);">
+      <span class="filter-label">Weight:</span>
+      <div class="weight-row">
+        <select id="wtOp" onchange="handleWtOpChange()">
+          <option value="any">Any Weight</option>
+          <option value="eq">Equals (=)</option>
+          <option value="gt">Greater Than (&gt;)</option>
+          <option value="gte">Greater Than or Equal (&gt;=)</option>
+          <option value="lt">Less Than (&lt;)</option>
+          <option value="lte">Less Than or Equal (&lt;=)</option>
+          <option value="between">Between</option>
+        </select>
+        <input type="number" id="wtVal1" step="0.001" placeholder="Val" style="display:none;" oninput="applyFilters()">
+        <span id="wtBetweenSpan" style="display:none; font-size:0.75rem; color:var(--text-muted);">&amp;</span>
+        <input type="number" id="wtVal2" step="0.001" placeholder="Max" style="display:none;" oninput="applyFilters()">
+      </div>
+      <button style="margin-left: auto; background: #334155; border: none; color: #fff; padding: 5px 12px; border-radius: 4px; font-size: 0.72rem; cursor: pointer;" onclick="resetAllFilters()">Reset Filters</button>
+    </div>
+  </div>
+
+  <div class="stats-bar">
+    <div>Filtered Items: <b id="statFilteredCount">0</b> / <span id="statTotalCount">0</span></div>
+    <div>Viewing: <b id="statCurIdx">0</b> of <span id="statMaxIdx">0</span></div>
+    <div>Selected for Download: <b id="statSelectedCount">0</b></div>
+  </div>
+
+  <!-- Main Card -->
+  <div class="card-container" id="cardContainer">
+    <div id="productContent" class="product-layout" style="display: none;">
+      <!-- Left: Image (450px) -->
+      <div class="img-wrapper" onclick="openLightbox()" title="Click to enlarge">
+        <img id="itemImg" src="" alt="Product Image" onerror="handleImageError()">
+        <div id="imgFallback" class="img-fallback">No Catalog Image Available</div>
+        <div class="zoom-hint">🔍 Tap to Zoom</div>
+      </div>
+
+      <!-- Right: Details in requested order -->
+      <div class="details-right">
+        <!-- 1. Variant -->
+        <div class="variant-title" id="dispVariant">---</div>
+        <!-- 2. Lotno -->
+        <div class="lot-text">Lot No: <span id="dispLot">---</span></div>
+
+        <!-- 3. Weight: Distinct, bold and standing out -->
+        <div class="weight-box">
+          <span class="weight-val" id="dispWeight">0.000</span><span class="weight-unit">g</span>
+        </div>
+
+        <!-- 4. Category & Group: Neutral, plain -->
+        <div class="meta-group">
+          <div class="meta-item">
+            <span class="meta-label">Category:</span>
+            <span class="meta-value" id="dispCategory">-</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Group:</span>
+            <span class="meta-value" id="dispGroup">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="emptyDetails" class="empty-state">
+      Upload the raw Excel file (Product_receipt.xlsx) above to begin viewing pending stock.
+    </div>
+  </div>
+
+  <!-- Bottom Navigation & Selection -->
+  <div class="actions-bar">
+    <button class="btn-nav" id="prevBtn" onclick="navigateItem(-1)" disabled>← Prev</button>
+    <label class="confirm-checkbox-label">
+      <input type="checkbox" id="itemCheckbox" onchange="toggleItemSelection(this.checked)">
+      <span>Select for Download</span>
+    </label>
+    <button class="btn-nav" id="nextBtn" onclick="navigateItem(1)" disabled>Next →</button>
+  </div>
+
+  <!-- Lightbox Modal -->
+  <div class="lightbox-modal" id="lightboxModal" onclick="if(event.target.id === 'lightboxModal') closeLightbox()">
+    <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+    <div class="lightbox-box">
+      <img id="modalImg" src="" alt="Enlarged View">
+    </div>
+  </div>
+
+  <script>
+    let rawPendingData = [];
+    let filteredItems = [];
+    let selectedKeys = new Set();
+    let currentIndex = 0;
+
+    const filterFields = {
+      cat: { col: 'Category', selected: new Set() },
+      grp: { col: 'Group', selected: new Set() },
+      stn: { col: 'STN No', selected: new Set() },
+      loc: { col: 'Location', selected: new Set() }
+    };
+
+    // Close dropdowns on outside click
+    window.addEventListener('click', (e) => {
+      if (!e.target.closest('.filter-box')) {
+        document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
+      }
+    });
+
+    function toggleDropdown(key) {
+      const menu = document.getElementById(`menu-${key}`);
+      const isShown = menu.classList.contains('show');
+      document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
+      if (!isShown) menu.classList.add('show');
+    }
+
+    // Load and parse ONLY the "Pending" sheet
+    document.getElementById('excelInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+
+        // Locate Pending sheet
+        let targetSheetName = workbook.SheetNames.find(n => n.trim().toLowerCase() === 'pending');
+        if (!targetSheetName) {
+          alert('Could not find a sheet named "Pending" in the uploaded file! Defaulting to first sheet.');
+          targetSheetName = workbook.SheetNames[0];
+        }
+
+        const sheet = workbook.Sheets[targetSheetName];
+        const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+        rawPendingData = [];
+        selectedKeys.clear();
+
+        json.forEach((row, idx) => {
+          // Normalize header readings
+          const getVal = (possibleKeys) => {
+            for (const k of possibleKeys) {
+              for (const rk of Object.keys(row)) {
+                if (rk.trim().toLowerCase() === k.toLowerCase()) return row[rk];
+              }
+            }
+            return '';
+          };
+
+          const variant = String(getVal(['Variant', 'Variant Code', 'SKU'])).trim();
+          const lotno = String(getVal(['Lotno', 'Lot Number', 'Lot No'])).trim();
+          const weightNum = parseFloat(getVal(['Weight', 'WT', 'Gross Wt'])) || 0;
+          const category = String(getVal(['Category', 'Final Category'])).trim();
+          const group = String(getVal(['Group', 'Final Group'])).trim();
+          const stnNo = String(getVal(['STN No', 'STN', 'STNNO'])).trim();
+          const location = String(getVal(['Location', 'LOC'])).trim();
+          const qnty = getVal(['Qnty', 'Qty', 'Quantity']) || 1;
+          const setof = getVal(['Setof', 'Set Of']) || '-';
+          const docket = String(getVal(['Docket No', 'Docket'])).trim();
+          const scanned = getVal(['Scanned']) || 'No';
+
+          const mergeKey = String(row['Merge'] || `${variant}${lotno}` || `row_${idx}`).trim();
+
+          // Store structured row plus all original raw columns for pristine export
+          rawPendingData.push({
+            _uid: `${variant}_${lotno}_${idx}`,
+            _merge: mergeKey,
+            _variant: variant,
+            _lotno: lotno,
+            _weight: weightNum,
+            _category: category,
+            _group: group,
+            _stnNo: stnNo,
+            _location: location,
+            _qnty: qnty,
+            _setof: setof,
+            _docket: docket,
+            _scanned: scanned,
+            _original: row
+          });
+        });
+
+        document.getElementById('statTotalCount').innerText = rawPendingData.length;
+        resetAllFilters();
+        alert(`Successfully loaded ${rawPendingData.length} pending items from the "Pending" sheet.`);
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    function getContextualRows(excludeKey = null) {
+      const wtOp = document.getElementById('wtOp').value;
+      const wt1 = parseFloat(document.getElementById('wtVal1').value);
+      const wt2 = parseFloat(document.getElementById('wtVal2').value);
+      const searchTerms = (document.getElementById('universalSearch')?.value || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+
+      return rawPendingData.filter(r => {
+        if (searchTerms.length > 0) {
+          const text = `${r._variant} ${r._lotno} ${r._category} ${r._group} ${r._stnNo} ${r._location} ${r._docket}`.toLowerCase();
+          if (!searchTerms.every(term => text.includes(term))) return false;
+        }
+
+        for (const key of Object.keys(filterFields)) {
+          if (key === excludeKey) continue;
+          const sel = filterFields[key].selected;
+          const val = r['_' + (key === 'cat' ? 'category' : key === 'grp' ? 'group' : key === 'stn' ? 'stnNo' : 'location')] || '(Blank)';
+          if (sel.size > 0 && !sel.has(val)) return false;
+        }
+
+        if (wtOp !== 'any' && !isNaN(wt1)) {
+          const w = r._weight;
+          if (wtOp === 'eq' && Math.abs(w - wt1) > 0.0001) return false;
+          if (wtOp === 'gt' && w <= wt1) return false;
+          if (wtOp === 'gte' && w < wt1) return false;
+          if (wtOp === 'lt' && w >= wt1) return false;
+          if (wtOp === 'lte' && w > wt1) return false;
+          if (wtOp === 'between') {
+            if (isNaN(wt2)) return false;
+            if (w < Math.min(wt1, wt2) || w > Math.max(wt1, wt2)) return false;
+          }
+        }
+
+        return true;
+      });
+    }
+
+    function refreshDropdownMenus() {
+      Object.keys(filterFields).forEach(key => {
+        const eligibleRows = getContextualRows(key);
+        const prop = '_' + (key === 'cat' ? 'category' : key === 'grp' ? 'group' : key === 'stn' ? 'stnNo' : 'location');
+        const counts = {};
+        eligibleRows.forEach(r => {
+          const val = r[prop] || '(Blank)';
+          counts[val] = (counts[val] || 0) + 1;
+        });
+
+        filterFields[key].selected.forEach(selVal => {
+          if (!counts[selVal]) counts[selVal] = 0;
+        });
+
+        const listContainer = document.getElementById(`list-${key}`);
+        const currentSearch = (document.querySelector(`#menu-${key} .dropdown-search`)?.value || '').toLowerCase();
+        listContainer.innerHTML = '';
+
+        const allKeys = Object.keys(counts).sort();
+        let checkedCount = 0;
+
+        allKeys.forEach(val => {
+          const isChecked = filterFields[key].selected.has(val);
+          if (isChecked) checkedCount++;
+          const item = document.createElement('label');
+          item.className = 'dropdown-item';
+          if (currentSearch && !val.toLowerCase().includes(currentSearch)) {
+            item.style.display = 'none';
+          }
+          item.innerHTML = `<input type="checkbox" value="${val}" ${isChecked ? 'checked' : ''} onchange="handleCheckboxChange('${key}', '${val}', this.checked)"><span>${val} <small style="color:var(--text-muted)">(${counts[val]})</small></span>`;
+          listContainer.appendChild(item);
+        });
+
+        const selectAllLbl = document.getElementById(`lbl-all-${key}`);
+        if (selectAllLbl) {
+          selectAllLbl.innerText = `${checkedCount} / ${allKeys.length}`;
+        }
+        updateDropdownBtnLabel(key);
+      });
+    }
+
+    function toggleSelectAllDropdown(key) {
+      const eligibleRows = getContextualRows(key);
+      const prop = '_' + (key === 'cat' ? 'category' : key === 'grp' ? 'group' : key === 'stn' ? 'stnNo' : 'location');
+      const allVals = Array.from(new Set(eligibleRows.map(r => r[prop] || '(Blank)')));
+
+      const isAllCurrentlySelected = allVals.length > 0 && allVals.every(v => filterFields[key].selected.has(v));
+      if (isAllCurrentlySelected) {
+        filterFields[key].selected.clear();
+      } else {
+        allVals.forEach(v => filterFields[key].selected.add(v));
+      }
+      applyFilters();
+    }
+
+    function filterChecklist(key, search) {
+      const s = search.toLowerCase();
+      const container = document.getElementById(`list-${key}`);
+      container.querySelectorAll('.dropdown-item').forEach(lbl => {
+        lbl.style.display = lbl.innerText.toLowerCase().includes(s) ? 'flex' : 'none';
+      });
+    }
+
+    function handleCheckboxChange(key, val, isChecked) {
+      if (isChecked) filterFields[key].selected.add(val);
+      else filterFields[key].selected.delete(val);
+      applyFilters();
+    }
+
+    function updateDropdownBtnLabel(key) {
+      const btn = document.querySelector(`#fb-${key} .dropdown-btn`);
+      const count = filterFields[key].selected.size;
+      const baseName = { cat: 'Categories', grp: 'Groups', stn: 'STNs', loc: 'Locations' }[key];
+      btn.innerText = count === 0 ? `All ${baseName}` : `${count} ${baseName} Selected`;
+    }
+
+    function handleWtOpChange() {
+      const op = document.getElementById('wtOp').value;
+      const v1 = document.getElementById('wtVal1'), v2 = document.getElementById('wtVal2'), sp = document.getElementById('wtBetweenSpan');
+      v1.style.display = op === 'any' ? 'none' : 'inline-block';
+      v2.style.display = op === 'between' ? 'inline-block' : 'none';
+      sp.style.display = op === 'between' ? 'inline-block' : 'none';
+      applyFilters();
+    }
+
+    function resetAllFilters() {
+      Object.keys(filterFields).forEach(key => filterFields[key].selected.clear());
+      document.getElementById('universalSearch').value = '';
+      document.getElementById('wtOp').value = 'any';
+      document.getElementById('wtVal1').value = '';
+      document.getElementById('wtVal2').value = '';
+      document.querySelectorAll('.dropdown-search').forEach(i => i.value = '');
+
+      const v1 = document.getElementById('wtVal1');
+      const v2 = document.getElementById('wtVal2');
+      const sp = document.getElementById('wtBetweenSpan');
+      v1.style.display = 'none';
+      v2.style.display = 'none';
+      sp.style.display = 'none';
+
+      applyFilters();
+    }
+
+    function applyFilters() {
+      filteredItems = getContextualRows(null);
+      currentIndex = 0;
+      refreshDropdownMenus();
+      updateUI();
+    }
+
+    function updateUI() {
+      document.getElementById('statFilteredCount').innerText = filteredItems.length;
+      document.getElementById('statMaxIdx').innerText = filteredItems.length;
+      document.getElementById('statSelectedCount').innerText = selectedKeys.size;
+      document.getElementById('excelSelCount').innerText = selectedKeys.size;
+
+      const pContent = document.getElementById('productContent');
+      const emptyDiv = document.getElementById('emptyDetails');
+
+      if (filteredItems.length === 0) {
+        document.getElementById('statCurIdx').innerText = 0;
+        pContent.style.display = 'none';
+        emptyDiv.style.display = 'block';
+        emptyDiv.innerText = rawPendingData.length === 0 ? 'Upload the raw Excel file above to begin viewing pending stock.' : 'No items match your active filters.';
+        document.getElementById('prevBtn').disabled = true;
+        document.getElementById('nextBtn').disabled = true;
+        document.getElementById('itemCheckbox').checked = false;
+        return;
+      }
+
+      emptyDiv.style.display = 'none';
+      pContent.style.display = 'flex';
+
+      const cur = filteredItems[currentIndex];
+      document.getElementById('statCurIdx').innerText = currentIndex + 1;
+
+      // Update Details (Order: Variant -> Lotno -> Weight -> Category & Group)
+      document.getElementById('dispVariant').innerText = cur._variant || '---';
+      document.getElementById('dispLot').innerText = cur._lotno || '---';
+      document.getElementById('dispWeight').innerText = Number(cur._weight).toFixed(3);
+      document.getElementById('dispCategory').innerText = cur._category || 'N/A';
+      document.getElementById('dispGroup').innerText = cur._group || 'N/A';
+
+      // Update Image
+      const img = document.getElementById('itemImg');
+      const fallback = document.getElementById('imgFallback');
+      img.style.display = 'block';
+      fallback.style.display = 'none';
+
+      const designCode = (cur._variant.length >= 9) ? cur._variant.slice(2, 9).toUpperCase() : cur._variant.toUpperCase();
+      img.dataset.retried = "0";
+      img.src = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${designCode}.jpg`;
+
+      // Checkbox state
+      document.getElementById('itemCheckbox').checked = selectedKeys.has(cur._uid);
+
+      // Nav buttons
+      document.getElementById('prevBtn').disabled = currentIndex === 0;
+      document.getElementById('nextBtn').disabled = currentIndex === filteredItems.length - 1;
+    }
+
+    function handleImageError() {
+      const img = document.getElementById('itemImg');
+      const cur = filteredItems[currentIndex];
+      if (!cur) return;
+      const designCode = (cur._variant.length >= 9) ? cur._variant.slice(2, 9).toUpperCase() : cur._variant.toUpperCase();
+
+      if (img.dataset.retried === "0") {
+        img.dataset.retried = "1";
+        img.src = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${designCode}.JPG`;
+        return;
+      }
+
+      img.style.display = 'none';
+      document.getElementById('imgFallback').style.display = 'block';
+    }
+
+    function toggleItemSelection(isChecked) {
+      if (filteredItems.length === 0) return;
+      const cur = filteredItems[currentIndex];
+      if (isChecked) selectedKeys.add(cur._uid);
+      else selectedKeys.delete(cur._uid);
+
+      document.getElementById('statSelectedCount').innerText = selectedKeys.size;
+      document.getElementById('excelSelCount').innerText = selectedKeys.size;
+    }
+
+    function navigateItem(step) {
+      const nextIdx = currentIndex + step;
+      if (nextIdx >= 0 && nextIdx < filteredItems.length) {
+        currentIndex = nextIdx;
+        updateUI();
+      }
+    }
+
+    // Keyboard Shortcuts (Arrow keys & Spacebar)
+    window.addEventListener('keydown', (e) => {
+      if (filteredItems.length === 0 || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        navigateItem(1);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        navigateItem(-1);
+      } else if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        const chk = document.getElementById('itemCheckbox');
+        chk.checked = !chk.checked;
+        toggleItemSelection(chk.checked);
+      } else if (e.key === 'Escape') {
+        closeLightbox();
+      }
+    });
+
+    // Lightbox modal functions
+    function openLightbox() {
+      if (filteredItems.length === 0) return;
+      const cur = filteredItems[currentIndex];
+      const designCode = (cur._variant.length >= 9) ? cur._variant.slice(2, 9).toUpperCase() : cur._variant.toUpperCase();
+      const modalImg = document.getElementById('modalImg');
+      modalImg.src = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${designCode}.jpg`;
+      document.getElementById('lightboxModal').classList.add('active');
+    }
+
+    function closeLightbox() {
+      document.getElementById('lightboxModal').classList.remove('active');
+    }
+
+    // 1. Export Excel: exactly reproduces the original file format
+    function exportSelectedExcel() {
+      if (selectedKeys.size === 0) return alert('No items selected for download! Use the checkbox on each item.');
+
+      const selectedRows = rawPendingData
+        .filter(r => selectedKeys.has(r._uid))
+        .map(r => {
+          // Re-create the row with exact headers and column order as Product_receipt.xlsx
+          return {
+            'Merge': r._merge,
+            'Variant': r._variant,
+            'Lotno': r._lotno,
+            'Weight': r._weight,
+            'Qnty': r._qnty,
+            'Category': r._category,
+            'Group': r._group,
+            'Setof': r._setof,
+            'STN No': r._stnNo,
+            'Docket No': r._docket,
+            'Location': r._location,
+            'Scanned': r._scanned
+          };
+        });
+
+      const ws = XLSX.utils.json_to_sheet(selectedRows, {
+        header: ['Merge', 'Variant', 'Lotno', 'Weight', 'Qnty', 'Category', 'Group', 'Setof', 'STN No', 'Docket No', 'Location', 'Scanned']
+      });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Pending");
+      XLSX.writeFile(wb, `Pending_Selected_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    }
+
+    // 2. Export PDF
+    function exportSelectedPDF() {
+      if (selectedKeys.size === 0) return alert('No items selected for PDF export! Use the checkbox on each item.');
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF('landscape');
+
+      doc.setFontSize(14);
+      doc.text("Selected Pending Stock Report", 14, 15);
+      doc.setFontSize(9);
+      doc.setTextColor(100);
+      doc.text(`Generated on: ${new Date().toLocaleString()} | Total Items: ${selectedKeys.size}`, 14, 21);
+
+      const items = rawPendingData.filter(r => selectedKeys.has(r._uid));
+      const tableData = items.map((r, i) => [
+        i + 1,
+        r._variant,
+        r._lotno,
+        Number(r._weight).toFixed(3),
+        r._category,
+        r._group,
+        r._stnNo,
+        r._location
+      ]);
+
+      doc.autoTable({
+        head: [['#', 'Variant', 'Lot No', 'Weight (g)', 'Category', 'Group', 'STN No', 'Location']],
+        body: tableData,
+        startY: 26,
+        theme: 'striped',
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
+        columnStyles: {
+          3: { fontStyle: 'bold', halign: 'right' }
+        }
+      });
+
+      doc.save(`Pending_Selected_${new Date().toISOString().slice(0, 10)}.pdf`);
+    }
+  </script>
+</body>
+</html>
