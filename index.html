@@ -2,430 +2,259 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pending Stock Scanner & Catalogue</title>
-  
-  <!-- SheetJS for Excel Parsing/Export -->
+  <title>PC Barcode Inwarding Scanner</title>
+  <!-- Excel Parser -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- jsPDF & AutoTable for PDF Generation -->
+  <!-- jsPDF & AutoTable for PDF Generation with Images -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.3/dist/jspdf.plugin.autotable.min.js"></script>
 
   <style>
-    :root {
-      --bg: #090e1a;
-      --card-bg: #131c2e;
-      --panel-bg: #0f172a;
-      --border: #22324e;
-      --primary: #38bdf8;
-      --primary-hover: #0284c7;
-      --accent: #10b981;
-      --danger: #ef4444;
-      --text: #f1f5f9;
-      --text-muted: #94a3b8;
-    }
-
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
-    body { background: var(--bg); color: var(--text); margin: 0; padding: 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-
-    /* Header */
-    .header { width: 100%; max-width: 1050px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
-    .header h2 { margin: 0; font-size: 1.5rem; color: var(--primary); }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #0b1329; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
     
-    .download-actions { display: flex; gap: 8px; }
-    .btn-download { border: none; padding: 8px 14px; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; gap: 5px; color: #fff; }
-    .btn-excel { background: #16a34a; }
-    .btn-excel:hover { background: #15803d; }
-    .btn-pdf { background: #2563eb; }
-    .btn-pdf:hover { background: #1d4ed8; }
+    .header { width: 100%; max-width: 850px; text-align: center; margin-bottom: 12px; }
+    .header h2 { margin: 0 0 4px 0; font-size: 1.6rem; color: #38bdf8; }
+    .header p { margin: 0; font-size: 0.85rem; color: #94a3b8; }
 
-    /* File Input */
-    .file-box { width: 100%; max-width: 1050px; background: var(--panel-bg); padding: 12px; border-radius: 8px; border: 1px dashed var(--primary); text-align: center; margin-bottom: 12px; }
-    .file-box label { font-size: 0.9rem; color: var(--primary); cursor: pointer; display: block; font-weight: 600; }
+    .file-box { width: 100%; max-width: 850px; background: #1e293b; padding: 12px; border-radius: 8px; border: 1px dashed #38bdf8; text-align: center; margin-bottom: 12px; }
+    .file-box label { font-size: 0.9rem; color: #38bdf8; cursor: pointer; display: block; font-weight: 600; }
     .file-box input { display: none; }
 
-    /* Scanner Gun Bar */
-    .scanner-bar { width: 100%; max-width: 1050px; display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 10px; font-size: 0.85rem; }
+    .status-bar { width: 100%; max-width: 850px; display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 10px 18px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 12px; font-size: 0.9rem; }
     .pulse-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #10b981; margin-right: 8px; animation: blink 1.2s infinite; }
-    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
     #scanInput {
       width: 100%;
-      max-width: 1050px;
-      padding: 13px;
-      margin-bottom: 12px;
-      font-size: 1.15rem;
+      max-width: 850px;
+      padding: 14px;
+      margin-bottom: 14px;
+      font-size: 1.2rem;
       font-weight: 700;
       color: #38bdf8;
-      background: #0f172a;
+      background: #111c38;
       border: 2px solid #38bdf8;
       border-radius: 8px;
       text-align: center;
       outline: none;
       box-shadow: 0 4px 12px rgba(56, 189, 248, 0.15);
     }
-    #scanInput::placeholder { color: #475569; font-weight: normal; font-size: 0.95rem; }
+    #scanInput::placeholder { color: #475569; font-weight: normal; font-size: 1rem; }
 
-    /* Filter Panel */
-    .control-panel { width: 100%; max-width: 1050px; background: var(--panel-bg); padding: 14px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
-    .filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; width: 100%; }
-    .filter-box { display: flex; flex-direction: column; gap: 4px; position: relative; }
-    .filter-label { font-size: 0.68rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
-
-    .search-input { background: #090e1a; border: 1px solid var(--border); color: #fff; padding: 8px 10px; border-radius: 6px; font-size: 0.8rem; outline: none; width: 100%; }
-    .search-input:focus { border-color: var(--primary); }
-
-    .dropdown-btn { background: #090e1a; color: var(--text); border: 1px solid var(--border); padding: 8px 10px; border-radius: 6px; font-size: 0.8rem; text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .dropdown-btn:hover { border-color: var(--primary); }
-    .dropdown-btn::after { content: "▾"; font-size: 0.75rem; margin-left: 6px; color: var(--text-muted); }
-
-    .dropdown-menu { display: none; position: absolute; top: calc(100% + 4px); left: 0; min-width: 240px; max-height: 300px; background: #0b1324; border: 1px solid var(--border); border-radius: 8px; z-index: 1000; flex-direction: column; padding: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
-    .dropdown-menu.show { display: flex; }
+    .card { width: 100%; max-width: 850px; border-radius: 12px; padding: 24px; text-align: center; min-height: 420px; display: flex; flex-direction: column; justify-content: center; }
+    .card.idle { background: #1e293b; border: 2px solid #475569; }
+    .card.found { background: #064e3b; border: 3px solid #10b981; }
+    .card.not-found { background: #7f1d1d; border: 3px solid #ef4444; }
     
-    .dropdown-toolbar { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
-    .select-all-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: var(--primary); cursor: pointer; padding: 2px 4px; border-radius: 4px; }
-    .select-all-row:hover { background: #1e293b; }
-    .dropdown-search { background: #090e1a; border: 1px solid var(--border); color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 0.76rem; outline: none; }
-    .dropdown-list { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; max-height: 180px; }
-    .dropdown-item { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; cursor: pointer; padding: 4px 6px; border-radius: 4px; }
-    .dropdown-item:hover { background: #1e293b; }
+    .status-text { font-size: 1.1rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
 
-    .weight-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-    .weight-row select, .weight-row input { background: #090e1a; border: 1px solid var(--border); color: var(--text); padding: 6px 8px; border-radius: 6px; font-size: 0.8rem; outline: none; }
-    .weight-row select { width: 140px; }
-    .weight-row input { width: 80px; }
-
-    /* Stats bar */
-    .stats-bar { width: 100%; max-width: 1050px; display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 9px 14px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 12px; font-size: 0.82rem; color: var(--text-muted); flex-wrap: wrap; gap: 8px; }
-    .stats-bar b { color: var(--primary); }
-
-    /* Main Inspection Card */
-    .card-container { width: 100%; max-width: 1050px; background: var(--card-bg); border: 2px solid var(--border); border-radius: 12px; padding: 22px; display: flex; flex-direction: column; gap: 16px; min-height: 480px; justify-content: center; transition: border-color 0.2s; }
-    .card-container.scanned-found { border-color: var(--accent); }
-    .card-container.scanned-missing { border-color: var(--danger); }
+    .product-content { display: flex; align-items: stretch; justify-content: flex-start; gap: 24px; margin-top: 10px; width: 100%; }
     
-    .product-layout { display: flex; gap: 30px; align-items: center; }
-    
-    /* Image Section */
-    .img-wrapper { 
-      width: 450px; 
-      height: 450px; 
-      min-width: 450px; 
-      background: #ffffff; 
-      border-radius: 12px; 
-      overflow: hidden; 
-      display: flex; 
-      align-items: center; 
-      justify-content: center; 
-      border: 2px solid var(--border); 
-      position: relative; 
-      cursor: zoom-in;
+    .product-img-wrapper { 
+      width: 450px; height: 450px; min-width: 450px; 
+      border-radius: 12px; overflow: hidden; background: #fff; 
+      border: 3px solid #334155; display: flex; align-items: center; justify-content: center;
     }
-    .img-wrapper img { width: 100%; height: 100%; object-fit: contain; }
-    .zoom-hint { position: absolute; bottom: 10px; right: 10px; background: rgba(9, 14, 26, 0.75); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; pointer-events: none; border: 1px solid var(--border); }
-    .img-fallback { color: #64748b; font-size: 0.85rem; text-align: center; display: none; padding: 20px; }
+    .product-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .no-img-text { font-size: 0.85rem; color: #94a3b8; text-align: center; padding: 12px; }
 
-    /* Details Section */
-    .details-right { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: left; }
+    .product-info-right { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: left; }
     
-    .scan-status-alert { font-size: 0.82rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; display: none; }
-    .variant-title { font-size: 2.1rem; font-weight: 800; color: #fff; margin: 0 0 6px 0; font-family: monospace; letter-spacing: 0.5px; }
-    .lot-text { font-size: 1.15rem; color: #cbd5e1; margin-bottom: 22px; font-family: monospace; }
+    .req-box { font-size: 2.2rem; font-weight: 800; color: #fff; margin: 0 0 10px 0; line-height: 1.1; font-family: monospace; }
     
-    /* Weight prominently styled */
-    .weight-box { 
-      display: inline-block; 
-      background: #0f172a; 
-      border: 1px solid #38bdf8; 
-      border-radius: 8px; 
-      padding: 12px 18px; 
-      margin-bottom: 24px; 
-      box-shadow: 0 4px 15px rgba(56, 189, 248, 0.12);
+    .details { font-size: 1.1rem; color: #f8fafc; line-height: 1.6; }
+    
+    /* Weight emphasis: standout & bold */
+    .weight-highlight {
+      font-size: 2.3rem;
+      font-weight: 900;
+      color: #38bdf8;
+      background: #0f172a;
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1px solid #38bdf8;
+      margin: 10px 0;
+      line-height: 1.1;
     }
-    .weight-val { font-size: 2.8rem; font-weight: 900; color: #38bdf8; line-height: 1; }
-    .weight-unit { font-size: 1.2rem; font-weight: 700; color: #94a3b8; margin-left: 4px; }
+    .weight-unit { font-size: 1.1rem; font-weight: 700; color: #94a3b8; margin-left: 4px; }
     
-    /* Category and Group: Neutral, plain */
-    .meta-group { display: flex; flex-direction: column; gap: 8px; font-size: 1rem; color: #94a3b8; font-weight: 400; }
-    .meta-item { display: flex; align-items: baseline; gap: 8px; }
-    .meta-label { color: #64748b; width: 85px; font-size: 0.95rem; }
-    .meta-value { color: #cbd5e1; }
-    
-    .raw-merge-text { font-family: monospace; font-size: 0.75rem; color: #64748b; margin-top: 14px; word-break: break-all; }
+    /* Neutral text for others */
+    .neutral-row { color: #94a3b8; font-size: 1rem; font-weight: 400; margin-top: 4px; }
+    .neutral-row span { color: #cbd5e1; }
 
-    /* Empty state */
-    .empty-state { text-align: center; color: var(--text-muted); padding: 60px 20px; font-size: 1.1rem; }
+    .raw-code { font-family: monospace; font-size: 0.85rem; color: #94a3b8; word-break: break-all; margin-top: 14px; }
 
-    /* Sticky Bottom Actions */
-    .actions-bar { 
-      position: sticky; 
-      bottom: 0; 
-      width: 100%; 
-      max-width: 1050px; 
-      background: rgba(15, 23, 42, 0.95); 
-      backdrop-filter: blur(8px); 
-      border: 1px solid var(--border); 
-      border-radius: 10px; 
-      padding: 12px 16px; 
-      display: flex; 
-      justify-content: space-between; 
-      align-items: center; 
-      margin-top: 12px; 
-      box-shadow: 0 -8px 25px rgba(0,0,0,0.5); 
-      z-index: 500; 
-    }
-    .btn-nav { background: #1e293b; color: #fff; border: 1px solid var(--border); padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.9rem; }
-    .btn-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+    .history { width: 100%; max-width: 850px; margin-top: 20px; }
+    .history h4 { margin: 0 0 10px 0; font-size: 1rem; color: #94a3b8; display: flex; justify-content: space-between; align-items: center; }
     
-    .confirm-checkbox-label {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      user-select: none;
-      background: #1e293b;
-      padding: 8px 16px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-    }
-    .confirm-checkbox-label input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent); }
+    .btn-group { display: flex; gap: 8px; }
+    .action-btn { color: white; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; cursor: pointer; user-select: none; border: none; }
+    .csv-btn { background: #16a34a; }
+    .csv-btn:hover { background: #15803d; }
+    .pdf-btn { background: #2563eb; }
+    .pdf-btn:hover { background: #1d4ed8; }
 
-    /* Lightbox Modal */
-    .lightbox-modal {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(4, 7, 15, 0.94);
-      backdrop-filter: blur(10px);
-      z-index: 10000;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-    .lightbox-modal.active { display: flex; }
-    .lightbox-box { width: 100%; max-width: 750px; height: calc(100vh - 120px); max-height: 750px; background: #fff; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative; }
-    .lightbox-box img { width: 100%; height: 100%; object-fit: contain; }
-    .lightbox-close { position: absolute; top: 16px; right: 20px; background: #1e293b; color: #fff; border: 1px solid var(--border); width: 40px; height: 40px; border-radius: 50%; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .history-table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 8px; overflow: hidden; font-size: 0.9rem; border: 1px solid #334155; }
+    .history-table th { background: #0f172a; padding: 10px 12px; text-align: left; color: #94a3b8; font-weight: 600; }
+    .history-table td { padding: 9px 12px; border-bottom: 1px solid #334155; }
+    .history-table tr:last-child td { border-bottom: none; }
 
-    @media (max-width: 860px) {
-      .product-layout { flex-direction: column; }
-      .img-wrapper { width: 100%; max-width: 380px; height: 380px; min-width: 0; }
-      .details-right { text-align: center; align-items: center; }
-      .meta-item { justify-content: center; }
-    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
   </style>
 </head>
 <body>
 
   <div class="header">
-    <h2>Pending Stock Inspection & Catalogue</h2>
-    <div class="download-actions">
-      <button class="btn-download btn-excel" onclick="exportSelectedExcel()">📥 Download Excel (<span id="excelSelCount">0</span>)</button>
-      <button class="btn-download btn-pdf" onclick="exportSelectedPDF()">📄 Download PDF</button>
-    </div>
+    <h2>Inwarding — PC Inspection Station</h2>
+    <p>Direct Barcode Scan • Verification Match • High-Res Image</p>
   </div>
 
   <div class="file-box">
-    <label for="excelInput">📂 Click here to load raw Excel file (Product_receipt.xlsx)</label>
+    <label for="excelInput">📂 Click here to load Inwarding Excel (Product_receipt.xlsx)</label>
     <input type="file" id="excelInput" accept=".xlsx, .xls">
   </div>
 
-  <!-- Barcode Gun Scanning Bar -->
-  <div class="scanner-bar">
-    <div><span class="pulse-dot"></span><b>Barcode Gun:</b> Active (Matches against Merge column)</div>
-    <div>Total Pending: <b id="statTotalLoaded">0</b> | Scanned Selected: <b id="statScannedCount">0</b></div>
+  <div class="status-bar">
+    <div><span class="pulse-dot"></span><b>Scanner Gun:</b> Ready for Scans</div>
+    <div>Database: <b id="dbCount">0</b> items | Checked: <b id="scanCount">0</b></div>
   </div>
 
-  <input type="text" id="scanInput" placeholder="Scan barcode tag here (auto-lookup with Merge column)..." autofocus autocomplete="off" />
+  <input type="text" id="scanInput" placeholder="Scan tag here (auto-submits and clears)..." autofocus autocomplete="off" />
 
-  <!-- Filter & Search Controls -->
-  <div class="control-panel">
-    <div class="filter-grid">
-      <!-- Universal Live Search -->
-      <div class="filter-box">
-        <span class="filter-label">Search (Variant, Lot, STN...)</span>
-        <input type="text" class="search-input" id="universalSearch" placeholder="Type keyword..." oninput="applyFilters()">
+  <div id="resultCard" class="card idle">
+    <div id="statusText" class="status-text" style="color: #94a3b8;">Ready for Tag</div>
+
+    <div id="productContent" class="product-content" style="display: none;">
+      <!-- Image on the Left -->
+      <div class="product-img-wrapper">
+        <img id="productImg" class="product-img" src="" alt="Product Large Image" onerror="handleImgError()">
+        <div id="noImgText" class="no-img-text" style="display: none;">Image not found on server</div>
       </div>
-
-      <!-- Category Filter -->
-      <div class="filter-box" id="fb-cat">
-        <span class="filter-label">Category</span>
-        <button class="dropdown-btn" onclick="toggleDropdown('cat')">All Categories</button>
-        <div class="dropdown-menu" id="menu-cat">
-          <div class="dropdown-toolbar">
-            <div class="select-all-row" onclick="toggleSelectAllDropdown('cat')">
-              <span>Select All</span>
-              <small id="lbl-all-cat">0 / 0</small>
-            </div>
-            <input type="text" class="dropdown-search" placeholder="Search..." oninput="filterChecklist('cat', this.value)">
-          </div>
-          <div class="dropdown-list" id="list-cat"></div>
-        </div>
-      </div>
-
-      <!-- Group Filter -->
-      <div class="filter-box" id="fb-grp">
-        <span class="filter-label">Group</span>
-        <button class="dropdown-btn" onclick="toggleDropdown('grp')">All Groups</button>
-        <div class="dropdown-menu" id="menu-grp">
-          <div class="dropdown-toolbar">
-            <div class="select-all-row" onclick="toggleSelectAllDropdown('grp')">
-              <span>Select All</span>
-              <small id="lbl-all-grp">0 / 0</small>
-            </div>
-            <input type="text" class="dropdown-search" placeholder="Search..." oninput="filterChecklist('grp', this.value)">
-          </div>
-          <div class="dropdown-list" id="list-grp"></div>
-        </div>
-      </div>
-
-      <!-- STN No Filter -->
-      <div class="filter-box" id="fb-stn">
-        <span class="filter-label">STN No</span>
-        <button class="dropdown-btn" onclick="toggleDropdown('stn')">All STNs</button>
-        <div class="dropdown-menu" id="menu-stn">
-          <div class="dropdown-toolbar">
-            <div class="select-all-row" onclick="toggleSelectAllDropdown('stn')">
-              <span>Select All</span>
-              <small id="lbl-all-stn">0 / 0</small>
-            </div>
-            <input type="text" class="dropdown-search" placeholder="Search..." oninput="filterChecklist('stn', this.value)">
-          </div>
-          <div class="dropdown-list" id="list-stn"></div>
-        </div>
-      </div>
-
-      <!-- Location Filter -->
-      <div class="filter-box" id="fb-loc">
-        <span class="filter-label">Location</span>
-        <button class="dropdown-btn" onclick="toggleDropdown('loc')">All Locations</button>
-        <div class="dropdown-menu" id="menu-loc">
-          <div class="dropdown-toolbar">
-            <div class="select-all-row" onclick="toggleSelectAllDropdown('loc')">
-              <span>Select All</span>
-              <small id="lbl-all-loc">0 / 0</small>
-            </div>
-            <input type="text" class="dropdown-search" placeholder="Search..." oninput="filterChecklist('loc', this.value)">
-          </div>
-          <div class="dropdown-list" id="list-loc"></div>
-        </div>
+      
+      <!-- Details on the Right: Variant -> Lotno -> Weight (Bold/Prominent) -> Category -> Group -->
+      <div class="product-info-right">
+        <div id="reqDisplay" class="req-box">---</div>
+        <div id="itemDetails" class="details"></div>
       </div>
     </div>
 
-    <!-- Weight Filter Row -->
-    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--border);">
-      <span class="filter-label">Weight:</span>
-      <div class="weight-row">
-        <select id="wtOp" onchange="handleWtOpChange()">
-          <option value="any">Any Weight</option>
-          <option value="eq">Equals (=)</option>
-          <option value="gt">Greater Than (&gt;)</option>
-          <option value="gte">Greater Than or Equal (&gt;=)</option>
-          <option value="lt">Less Than (&lt;)</option>
-          <option value="lte">Less Than or Equal (&lt;=)</option>
-          <option value="between">Between</option>
-        </select>
-        <input type="number" id="wtVal1" step="0.001" placeholder="Val" style="display:none;" oninput="applyFilters()">
-        <span id="wtBetweenSpan" style="display:none; font-size:0.75rem; color:var(--text-muted);">&amp;</span>
-        <input type="number" id="wtVal2" step="0.001" placeholder="Max" style="display:none;" oninput="applyFilters()">
+    <div id="idleDetails" class="details" style="text-align: center; color: #94a3b8; margin-top: 20px;">Pull trigger on scanner gun to inspect product</div>
+    <div id="rawDisplay" class="raw-code"></div>
+  </div>
+
+  <div class="history">
+    <h4>
+      <span>Verified Items Log</span>
+      <div class="btn-group">
+        <button class="action-btn csv-btn" onclick="exportExcel()">📥 Download Excel</button>
+        <button class="action-btn pdf-btn" id="pdfBtn" onclick="exportPDF()">📄 Download PDF with Images</button>
       </div>
-      <button style="margin-left: auto; background: #334155; border: none; color: #fff; padding: 5px 12px; border-radius: 4px; font-size: 0.72rem; cursor: pointer;" onclick="resetAllFilters()">Reset Filters</button>
-    </div>
-  </div>
-
-  <div class="stats-bar">
-    <div>Filtered Items: <b id="statFilteredCount">0</b> / <span id="statTotalCount">0</span></div>
-    <div>Viewing: <b id="statCurIdx">0</b> of <span id="statMaxIdx">0</span></div>
-    <div>Selected for Download: <b id="statSelectedCount">0</b></div>
-  </div>
-
-  <!-- Main Card -->
-  <div class="card-container" id="cardContainer">
-    <div id="productContent" class="product-layout" style="display: none;">
-      <!-- Left: Image (450px) -->
-      <div class="img-wrapper" onclick="openLightbox()" title="Click to enlarge">
-        <img id="itemImg" src="" alt="Product Image" onerror="handleImageError()">
-        <div id="imgFallback" class="img-fallback">No Catalog Image Available</div>
-        <div class="zoom-hint">🔍 Tap to Zoom</div>
-      </div>
-
-      <!-- Right: Details in requested order -->
-      <div class="details-right">
-        <div id="scanAlert" class="scan-status-alert"></div>
-        <!-- 1. Variant -->
-        <div class="variant-title" id="dispVariant">---</div>
-        <!-- 2. Lotno -->
-        <div class="lot-text">Lot No: <span id="dispLot">---</span></div>
-
-        <!-- 3. Weight: Distinct, bold and standing out -->
-        <div class="weight-box">
-          <span class="weight-val" id="dispWeight">0.000</span><span class="weight-unit">g</span>
-        </div>
-
-        <!-- 4. Category & Group: Neutral, plain -->
-        <div class="meta-group">
-          <div class="meta-item">
-            <span class="meta-label">Category:</span>
-            <span class="meta-value" id="dispCategory">-</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">Group:</span>
-            <span class="meta-value" id="dispGroup">-</span>
-          </div>
-        </div>
-
-        <div class="raw-merge-text" id="dispMerge">Merge Key: ---</div>
-      </div>
-    </div>
-
-    <div id="emptyDetails" class="empty-state">
-      Upload the raw Excel file (Product_receipt.xlsx) above to begin scanning and viewing pending stock.
-    </div>
-  </div>
-
-  <!-- Bottom Navigation & Selection -->
-  <div class="actions-bar">
-    <button class="btn-nav" id="prevBtn" onclick="navigateItem(-1)" disabled>← Prev</button>
-    <label class="confirm-checkbox-label">
-      <input type="checkbox" id="itemCheckbox" onchange="toggleItemSelection(this.checked)">
-      <span>Select for Download</span>
-    </label>
-    <button class="btn-nav" id="nextBtn" onclick="navigateItem(1)" disabled>Next →</button>
-  </div>
-
-  <!-- Lightbox Modal -->
-  <div class="lightbox-modal" id="lightboxModal" onclick="if(event.target.id === 'lightboxModal') closeLightbox()">
-    <button class="lightbox-close" onclick="closeLightbox()">✕</button>
-    <div class="lightbox-box">
-      <img id="modalImg" src="" alt="Enlarged View">
-    </div>
+    </h4>
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Variant</th>
+          <th>Lot No</th>
+          <th>Weight</th>
+          <th>Category</th>
+          <th>Group</th>
+          <th>STN No</th>
+        </tr>
+      </thead>
+      <tbody id="historyBody">
+        <tr>
+          <td colspan="7" style="text-align:center; color:#64748b; padding:18px;">No items scanned yet</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
   <script>
-    let rawPendingData = [];
-    let mergeMap = new Map();
-    let filteredItems = [];
-    let selectedKeys = new Set();
-    let currentIndex = 0;
+    let DB = {};
+    let scannedItems = [];
+    const scanInput = document.getElementById('scanInput');
     let scanTimeout;
 
-    const scanInput = document.getElementById('scanInput');
-
-    // Auto-focus scanner input
+    // Maintain focus on scanner gun input
     scanInput.addEventListener('blur', () => {
       setTimeout(() => {
-        if (document.activeElement.id !== 'excelInput' &&
-            document.activeElement.tagName !== 'INPUT' &&
-            document.activeElement.tagName !== 'SELECT') {
+        if (document.activeElement.id !== 'excelInput') {
           scanInput.focus();
         }
-      }, 150);
+      }, 10);
     });
 
-    // Audio Feedback for Gun Scans
+    function handleImgError() {
+      document.getElementById('productImg').style.display = 'none';
+      document.getElementById('noImgText').style.display = 'block';
+    }
+
+    // Load specifically from "Pending" sheet and match headers
+    document.getElementById('excelInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        
+        // Strictly target the "Pending" sheet
+        let sheetName = workbook.SheetNames.find(n => n.trim().toLowerCase() === 'pending');
+        if (!sheetName) {
+          alert('Sheet "Pending" not found! Defaulting to first available sheet: ' + workbook.SheetNames[0]);
+          sheetName = workbook.SheetNames[0];
+        }
+        
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        
+        DB = {};
+        rows.forEach(r => {
+          const getVal = (keys) => {
+            for (const k of keys) {
+              for (const rowKey of Object.keys(r)) {
+                if (rowKey.trim().toLowerCase() === k.toLowerCase()) return String(r[rowKey] || '').trim();
+              }
+            }
+            return '';
+          };
+
+          const variant = getVal(['Variant', 'Variant Code', 'SKU']);
+          const lotno = getVal(['Lotno', 'Lot Number', 'Lot No']);
+          let mergeKey = getVal(['Merge', '23 Digit code', '23 DIGIT CODE']);
+
+          // Fallback if formula not pre-calculated
+          if (!mergeKey || mergeKey.startsWith('=')) {
+            mergeKey = `${variant}${lotno}`;
+          }
+
+          if (mergeKey) {
+            DB[mergeKey.toUpperCase()] = {
+              merge: mergeKey,
+              v: variant,
+              l: lotno,
+              w: getVal(['Weight', 'WT', 'Gross Wt']),
+              q: getVal(['Qnty', 'Qty']) || 1,
+              c: getVal(['Category', 'Final Category']),
+              g: getVal(['Group', 'Final Group']),
+              setof: getVal(['Setof', 'Set Of']) || '-',
+              stn: getVal(['STN No', 'STN', 'STNNO']),
+              docket: getVal(['Docket No', 'Docket']),
+              loc: getVal(['Location', 'LOC']),
+              rawRow: r
+            };
+          }
+        });
+
+        document.getElementById('dbCount').innerText = Object.keys(DB).length;
+        alert(`Loaded ${Object.keys(DB).length} products successfully from Pending sheet.`);
+        scanInput.focus();
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
     function playBeep(success) {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -450,10 +279,10 @@
 
     scanInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
+        e.preventDefault(); 
         const val = scanInput.value.trim();
-        if (val) {
-          lookupScannedCode(val);
+        if (val.length > 0) {
+          processCode(val);
           scanInput.value = "";
         }
       }
@@ -464,505 +293,223 @@
       scanTimeout = setTimeout(function() {
         const val = scanInput.value.trim();
         if (val.length > 0) {
-          lookupScannedCode(val);
-          scanInput.value = "";
+          processCode(val);
+          scanInput.value = ""; 
         }
-      }, 160);
+      }, 150); 
     });
 
-    // Scanner Lookup: matches against the "Merge" column
-    function lookupScannedCode(code) {
-      if (rawPendingData.length === 0) {
-        alert("Please load your Excel file first!");
-        return;
-      }
+    function processCode(rawText) {
+      const extractedKey = rawText.trim().toUpperCase(); 
+      
+      const card = document.getElementById('resultCard');
+      const statusText = document.getElementById('statusText');
+      const reqDisplay = document.getElementById('reqDisplay');
+      const productContent = document.getElementById('productContent');
+      const productImg = document.getElementById('productImg');
+      const noImgText = document.getElementById('noImgText');
+      const itemDetails = document.getElementById('itemDetails');
+      const idleDetails = document.getElementById('idleDetails');
+      const rawDisplay = document.getElementById('rawDisplay');
 
-      const cleanCode = code.trim();
-      const card = document.getElementById('cardContainer');
-      const scanAlert = document.getElementById('scanAlert');
+      rawDisplay.innerText = `Full Scanned Code: ${rawText}`;
 
-      // Look up code against normalized merge Map
-      const matchedItem = mergeMap.get(cleanCode.toUpperCase());
-
-      if (matchedItem) {
+      // Direct Lookup with Merge Key
+      if (DB[extractedKey]) {
+        const item = DB[extractedKey];
         playBeep(true);
-        matchedItem._scanned = 'Yes';
-        selectedKeys.add(matchedItem._uid);
+        card.className = "card found";
+        statusText.innerText = "MATCH FOUND";
+        statusText.style.color = "#34d399";
+        
+        // 1. Variant as major header
+        reqDisplay.innerText = item.v || '---';
 
-        // Ensure active filters show this item
-        const idxInFiltered = filteredItems.findIndex(i => i._uid === matchedItem._uid);
-        if (idxInFiltered !== -1) {
-          currentIndex = idxInFiltered;
-        } else {
-          // If filtered out, reset filters to show the scanned item directly
-          resetAllFilters();
-          currentIndex = filteredItems.findIndex(i => i._uid === matchedItem._uid);
+        // High-res Image URL
+        const imgKey = (item.v && item.v.length >= 9) ? item.v.slice(2, 9).toUpperCase() : item.v.toUpperCase();
+        const imgUrl = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${imgKey}.jpg`;
+
+        productImg.style.display = 'block';
+        noImgText.style.display = 'none';
+        productImg.src = imgUrl;
+
+        // Details order: Lot No -> Weight (Bold/Standout) -> Category & Group (Neutral)
+        itemDetails.innerHTML = `
+          <div style="color:#cbd5e1; font-family: monospace; font-size: 1.15rem; margin-bottom: 4px;"><b>Lot No:</b> ${item.l || '-'}</div>
+          <div>
+            <div class="weight-highlight">${parseFloat(item.w || 0).toFixed(3)}<span class="weight-unit">g</span></div>
+          </div>
+          <div class="neutral-row">Category: <span>${item.c || '-'}</span></div>
+          <div class="neutral-row">Group: <span>${item.g || '-'}</span></div>
+        `;
+
+        productContent.style.display = 'flex';
+        idleDetails.style.display = 'none';
+
+        if (!scannedItems.some(x => x.key === extractedKey)) {
+          scannedItems.unshift({ 
+            key: extractedKey, 
+            variant: item.v,
+            lotno: item.l,
+            wt: item.w,
+            cat: item.c, 
+            grp: item.g, 
+            stn: item.stn, 
+            qnty: item.q,
+            setof: item.setof,
+            docket: item.docket,
+            loc: item.loc,
+            imgUrl: imgUrl,
+            time: new Date().toLocaleTimeString() 
+          });
+          document.getElementById('scanCount').innerText = scannedItems.length;
+          updateHistoryUI();
         }
-
-        updateUI();
-
-        card.className = "card-container scanned-found";
-        scanAlert.style.display = "block";
-        scanAlert.style.color = "#34d399";
-        scanAlert.innerText = `✔ SCANNED & SELECTED: ${cleanCode}`;
       } else {
         playBeep(false);
-        card.className = "card-container scanned-missing";
-        scanAlert.style.display = "block";
-        scanAlert.style.color = "#f87171";
-        scanAlert.innerText = `✖ NO PENDING MATCH FOR MERGE CODE: ${cleanCode}`;
+        card.className = "card not-found";
+        statusText.innerText = "NOT IN PENDING LIST";
+        statusText.style.color = "#f87171";
+        
+        reqDisplay.innerText = "NO MATCH";
+
+        productContent.style.display = 'none';
+        idleDetails.style.display = 'block';
+        idleDetails.innerText = Object.keys(DB).length === 0 ? "Please upload your Excel file first using the box above!" : "This product does not match any record in the sheet.";
       }
-
-      setTimeout(() => {
-        card.className = "card-container";
-        scanAlert.style.display = "none";
-      }, 3500);
     }
 
-    const filterFields = {
-      cat: { col: 'Category', selected: new Set() },
-      grp: { col: 'Group', selected: new Set() },
-      stn: { col: 'STN No', selected: new Set() },
-      loc: { col: 'Location', selected: new Set() }
-    };
-
-    // Close dropdowns on outside click
-    window.addEventListener('click', (e) => {
-      if (!e.target.closest('.filter-box')) {
-        document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
-      }
-    });
-
-    function toggleDropdown(key) {
-      const menu = document.getElementById(`menu-${key}`);
-      const isShown = menu.classList.contains('show');
-      document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
-      if (!isShown) menu.classList.add('show');
-    }
-
-    // Load and parse ONLY the "Pending" sheet
-    document.getElementById('excelInput').addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        const data = new Uint8Array(evt.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
-
-        // Locate Pending sheet
-        let targetSheetName = workbook.SheetNames.find(n => n.trim().toLowerCase() === 'pending');
-        if (!targetSheetName) {
-          alert('Could not find sheet named "Pending"! Using first available sheet.');
-          targetSheetName = workbook.SheetNames[0];
-        }
-
-        const sheet = workbook.Sheets[targetSheetName];
-        const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-
-        rawPendingData = [];
-        mergeMap.clear();
-        selectedKeys.clear();
-
-        json.forEach((row, idx) => {
-          const getVal = (possibleKeys) => {
-            for (const k of possibleKeys) {
-              for (const rk of Object.keys(row)) {
-                if (rk.trim().toLowerCase() === k.toLowerCase()) return row[rk];
-              }
-            }
-            return '';
-          };
-
-          const variant = String(getVal(['Variant', 'Variant Code', 'SKU'])).trim();
-          const lotno = String(getVal(['Lotno', 'Lot Number', 'Lot No'])).trim();
-          const weightNum = parseFloat(getVal(['Weight', 'WT', 'Gross Wt'])) || 0;
-          const category = String(getVal(['Category', 'Final Category'])).trim();
-          const group = String(getVal(['Group', 'Final Group'])).trim();
-          const stnNo = String(getVal(['STN No', 'STN', 'STNNO'])).trim();
-          const location = String(getVal(['Location', 'LOC'])).trim();
-          const qnty = getVal(['Qnty', 'Qty', 'Quantity']) || 1;
-          const setof = getVal(['Setof', 'Set Of']) || '-';
-          const docket = String(getVal(['Docket No', 'Docket'])).trim();
-          const scanned = String(getVal(['Scanned']) || 'No').trim();
-
-          // Calculate merge key (Merge column, or Variant + Lotno fallback)
-          let mergeKey = String(row['Merge'] || '').trim();
-          if (!mergeKey || mergeKey.startsWith('=')) {
-            mergeKey = `${variant}${lotno}`;
-          }
-
-          const itemObj = {
-            _uid: `${variant}_${lotno}_${idx}`,
-            _merge: mergeKey,
-            _variant: variant,
-            _lotno: lotno,
-            _weight: weightNum,
-            _category: category,
-            _group: group,
-            _stnNo: stnNo,
-            _location: location,
-            _qnty: qnty,
-            _setof: setof,
-            _docket: docket,
-            _scanned: scanned,
-            _original: row
-          };
-
-          rawPendingData.push(itemObj);
-
-          // Index by uppercase merge key for instant scanner lookup
-          if (mergeKey) {
-            mergeMap.set(mergeKey.toUpperCase(), itemObj);
-          }
-        });
-
-        document.getElementById('statTotalLoaded').innerText = rawPendingData.length;
-        document.getElementById('statTotalCount').innerText = rawPendingData.length;
-        resetAllFilters();
-        alert(`Successfully loaded ${rawPendingData.length} pending items from the "Pending" sheet.`);
-        scanInput.focus();
-      };
-      reader.readAsArrayBuffer(file);
-    });
-
-    function getContextualRows(excludeKey = null) {
-      const wtOp = document.getElementById('wtOp').value;
-      const wt1 = parseFloat(document.getElementById('wtVal1').value);
-      const wt2 = parseFloat(document.getElementById('wtVal2').value);
-      const searchTerms = (document.getElementById('universalSearch')?.value || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
-
-      return rawPendingData.filter(r => {
-        if (searchTerms.length > 0) {
-          const text = `${r._variant} ${r._lotno} ${r._merge} ${r._category} ${r._group} ${r._stnNo} ${r._location} ${r._docket}`.toLowerCase();
-          if (!searchTerms.every(term => text.includes(term))) return false;
-        }
-
-        for (const key of Object.keys(filterFields)) {
-          if (key === excludeKey) continue;
-          const sel = filterFields[key].selected;
-          const val = r['_' + (key === 'cat' ? 'category' : key === 'grp' ? 'group' : key === 'stn' ? 'stnNo' : 'location')] || '(Blank)';
-          if (sel.size > 0 && !sel.has(val)) return false;
-        }
-
-        if (wtOp !== 'any' && !isNaN(wt1)) {
-          const w = r._weight;
-          if (wtOp === 'eq' && Math.abs(w - wt1) > 0.0001) return false;
-          if (wtOp === 'gt' && w <= wt1) return false;
-          if (wtOp === 'gte' && w < wt1) return false;
-          if (wtOp === 'lt' && w >= wt1) return false;
-          if (wtOp === 'lte' && w > wt1) return false;
-          if (wtOp === 'between') {
-            if (isNaN(wt2)) return false;
-            if (w < Math.min(wt1, wt2) || w > Math.max(wt1, wt2)) return false;
-          }
-        }
-
-        return true;
-      });
-    }
-
-    function refreshDropdownMenus() {
-      Object.keys(filterFields).forEach(key => {
-        const eligibleRows = getContextualRows(key);
-        const prop = '_' + (key === 'cat' ? 'category' : key === 'grp' ? 'group' : key === 'stn' ? 'stnNo' : 'location');
-        const counts = {};
-        eligibleRows.forEach(r => {
-          const val = r[prop] || '(Blank)';
-          counts[val] = (counts[val] || 0) + 1;
-        });
-
-        filterFields[key].selected.forEach(selVal => {
-          if (!counts[selVal]) counts[selVal] = 0;
-        });
-
-        const listContainer = document.getElementById(`list-${key}`);
-        const currentSearch = (document.querySelector(`#menu-${key} .dropdown-search`)?.value || '').toLowerCase();
-        listContainer.innerHTML = '';
-
-        const allKeys = Object.keys(counts).sort();
-        let checkedCount = 0;
-
-        allKeys.forEach(val => {
-          const isChecked = filterFields[key].selected.has(val);
-          if (isChecked) checkedCount++;
-          const item = document.createElement('label');
-          item.className = 'dropdown-item';
-          if (currentSearch && !val.toLowerCase().includes(currentSearch)) {
-            item.style.display = 'none';
-          }
-          item.innerHTML = `<input type="checkbox" value="${val}" ${isChecked ? 'checked' : ''} onchange="handleCheckboxChange('${key}', '${val}', this.checked)"><span>${val} <small style="color:var(--text-muted)">(${counts[val]})</small></span>`;
-          listContainer.appendChild(item);
-        });
-
-        const selectAllLbl = document.getElementById(`lbl-all-${key}`);
-        if (selectAllLbl) {
-          selectAllLbl.innerText = `${checkedCount} / ${allKeys.length}`;
-        }
-        updateDropdownBtnLabel(key);
-      });
-    }
-
-    function toggleSelectAllDropdown(key) {
-      const eligibleRows = getContextualRows(key);
-      const prop = '_' + (key === 'cat' ? 'category' : key === 'grp' ? 'group' : key === 'stn' ? 'stnNo' : 'location');
-      const allVals = Array.from(new Set(eligibleRows.map(r => r[prop] || '(Blank)')));
-
-      const isAllCurrentlySelected = allVals.length > 0 && allVals.every(v => filterFields[key].selected.has(v));
-      if (isAllCurrentlySelected) {
-        filterFields[key].selected.clear();
-      } else {
-        allVals.forEach(v => filterFields[key].selected.add(v));
-      }
-      applyFilters();
-    }
-
-    function filterChecklist(key, search) {
-      const s = search.toLowerCase();
-      const container = document.getElementById(`list-${key}`);
-      container.querySelectorAll('.dropdown-item').forEach(lbl => {
-        lbl.style.display = lbl.innerText.toLowerCase().includes(s) ? 'flex' : 'none';
-      });
-    }
-
-    function handleCheckboxChange(key, val, isChecked) {
-      if (isChecked) filterFields[key].selected.add(val);
-      else filterFields[key].selected.delete(val);
-      applyFilters();
-    }
-
-    function updateDropdownBtnLabel(key) {
-      const btn = document.querySelector(`#fb-${key} .dropdown-btn`);
-      const count = filterFields[key].selected.size;
-      const baseName = { cat: 'Categories', grp: 'Groups', stn: 'STNs', loc: 'Locations' }[key];
-      btn.innerText = count === 0 ? `All ${baseName}` : `${count} ${baseName} Selected`;
-    }
-
-    function handleWtOpChange() {
-      const op = document.getElementById('wtOp').value;
-      const v1 = document.getElementById('wtVal1'), v2 = document.getElementById('wtVal2'), sp = document.getElementById('wtBetweenSpan');
-      v1.style.display = op === 'any' ? 'none' : 'inline-block';
-      v2.style.display = op === 'between' ? 'inline-block' : 'none';
-      sp.style.display = op === 'between' ? 'inline-block' : 'none';
-      applyFilters();
-    }
-
-    function resetAllFilters() {
-      Object.keys(filterFields).forEach(key => filterFields[key].selected.clear());
-      document.getElementById('universalSearch').value = '';
-      document.getElementById('wtOp').value = 'any';
-      document.getElementById('wtVal1').value = '';
-      document.getElementById('wtVal2').value = '';
-      document.querySelectorAll('.dropdown-search').forEach(i => i.value = '');
-
-      const v1 = document.getElementById('wtVal1');
-      const v2 = document.getElementById('wtVal2');
-      const sp = document.getElementById('wtBetweenSpan');
-      v1.style.display = 'none';
-      v2.style.display = 'none';
-      sp.style.display = 'none';
-
-      applyFilters();
-    }
-
-    function applyFilters() {
-      filteredItems = getContextualRows(null);
-      currentIndex = 0;
-      refreshDropdownMenus();
-      updateUI();
-    }
-
-    function updateUI() {
-      document.getElementById('statFilteredCount').innerText = filteredItems.length;
-      document.getElementById('statMaxIdx').innerText = filteredItems.length;
-      document.getElementById('statSelectedCount').innerText = selectedKeys.size;
-      document.getElementById('excelSelCount').innerText = selectedKeys.size;
-      document.getElementById('statScannedCount').innerText = selectedKeys.size;
-
-      const pContent = document.getElementById('productContent');
-      const emptyDiv = document.getElementById('emptyDetails');
-
-      if (filteredItems.length === 0) {
-        document.getElementById('statCurIdx').innerText = 0;
-        pContent.style.display = 'none';
-        emptyDiv.style.display = 'block';
-        emptyDiv.innerText = rawPendingData.length === 0 ? 'Upload the raw Excel file above to begin viewing pending stock.' : 'No items match your active filters.';
-        document.getElementById('prevBtn').disabled = true;
-        document.getElementById('nextBtn').disabled = true;
-        document.getElementById('itemCheckbox').checked = false;
+    function updateHistoryUI() {
+      const tbody = document.getElementById('historyBody');
+      if (scannedItems.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#64748b; padding:18px;">No items scanned yet</td></tr>';
         return;
       }
-
-      emptyDiv.style.display = 'none';
-      pContent.style.display = 'flex';
-
-      const cur = filteredItems[currentIndex];
-      document.getElementById('statCurIdx').innerText = currentIndex + 1;
-
-      // Update Details (Order: Variant -> Lotno -> Weight -> Category & Group)
-      document.getElementById('dispVariant').innerText = cur._variant || '---';
-      document.getElementById('dispLot').innerText = cur._lotno || '---';
-      document.getElementById('dispWeight').innerText = Number(cur._weight).toFixed(3);
-      document.getElementById('dispCategory').innerText = cur._category || 'N/A';
-      document.getElementById('dispGroup').innerText = cur._group || 'N/A';
-      document.getElementById('dispMerge').innerText = `Merge Key: ${cur._merge}`;
-
-      // Update Image
-      const img = document.getElementById('itemImg');
-      const fallback = document.getElementById('imgFallback');
-      img.style.display = 'block';
-      fallback.style.display = 'none';
-
-      const designCode = (cur._variant.length >= 9) ? cur._variant.slice(2, 9).toUpperCase() : cur._variant.toUpperCase();
-      img.dataset.retried = "0";
-      img.src = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${designCode}.jpg`;
-
-      // Checkbox state
-      document.getElementById('itemCheckbox').checked = selectedKeys.has(cur._uid);
-
-      // Nav buttons
-      document.getElementById('prevBtn').disabled = currentIndex === 0;
-      document.getElementById('nextBtn').disabled = currentIndex === filteredItems.length - 1;
+      tbody.innerHTML = scannedItems.map(item => `
+        <tr>
+          <td style="color:#94a3b8;">${item.time}</td>
+          <td><b style="color:#38bdf8;">${item.variant}</b></td>
+          <td style="font-family: monospace;">${item.lotno}</td>
+          <td><b>${parseFloat(item.wt || 0).toFixed(3)}g</b></td>
+          <td>${item.cat}</td>
+          <td>${item.grp}</td>
+          <td>${item.stn}</td>
+        </tr>
+      `).join('');
     }
 
-    function handleImageError() {
-      const img = document.getElementById('itemImg');
-      const cur = filteredItems[currentIndex];
-      if (!cur) return;
-      const designCode = (cur._variant.length >= 9) ? cur._variant.slice(2, 9).toUpperCase() : cur._variant.toUpperCase();
+    // Export Excel formatted exactly like the uploaded file
+    function exportExcel() {
+      if (scannedItems.length === 0) return alert('No items verified yet!');
+      
+      const rows = scannedItems.map(i => ({
+        'Merge': i.key,
+        'Variant': i.variant,
+        'Lotno': i.lotno,
+        'Weight': parseFloat(i.wt) || 0,
+        'Qnty': i.qnty,
+        'Category': i.cat,
+        'Group': i.grp,
+        'Setof': i.setof,
+        'STN No': i.stn,
+        'Docket No': i.docket,
+        'Location': i.loc,
+        'Scanned': 'Yes'
+      }));
 
-      if (img.dataset.retried === "0") {
-        img.dataset.retried = "1";
-        img.src = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${designCode}.JPG`;
-        return;
-      }
-
-      img.style.display = 'none';
-      document.getElementById('imgFallback').style.display = 'block';
-    }
-
-    function toggleItemSelection(isChecked) {
-      if (filteredItems.length === 0) return;
-      const cur = filteredItems[currentIndex];
-      if (isChecked) selectedKeys.add(cur._uid);
-      else selectedKeys.delete(cur._uid);
-
-      document.getElementById('statSelectedCount').innerText = selectedKeys.size;
-      document.getElementById('excelSelCount').innerText = selectedKeys.size;
-      document.getElementById('statScannedCount').innerText = selectedKeys.size;
-    }
-
-    function navigateItem(step) {
-      const nextIdx = currentIndex + step;
-      if (nextIdx >= 0 && nextIdx < filteredItems.length) {
-        currentIndex = nextIdx;
-        updateUI();
-      }
-    }
-
-    // Keyboard Shortcuts (Arrow keys & Spacebar)
-    window.addEventListener('keydown', (e) => {
-      if (e.target.id === 'scanInput' || e.target.id === 'universalSearch' || e.target.tagName === 'SELECT') return;
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        navigateItem(1);
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        navigateItem(-1);
-      } else if (e.key === ' ' || e.code === 'Space') {
-        e.preventDefault();
-        const chk = document.getElementById('itemCheckbox');
-        chk.checked = !chk.checked;
-        toggleItemSelection(chk.checked);
-      } else if (e.key === 'Escape') {
-        closeLightbox();
-      }
-    });
-
-    // Lightbox modal functions
-    function openLightbox() {
-      if (filteredItems.length === 0) return;
-      const cur = filteredItems[currentIndex];
-      const designCode = (cur._variant.length >= 9) ? cur._variant.slice(2, 9).toUpperCase() : cur._variant.toUpperCase();
-      const modalImg = document.getElementById('modalImg');
-      modalImg.src = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${designCode}.jpg`;
-      document.getElementById('lightboxModal').classList.add('active');
-    }
-
-    function closeLightbox() {
-      document.getElementById('lightboxModal').classList.remove('active');
-    }
-
-    // Export Excel: exactly reproduces the original file format
-    function exportSelectedExcel() {
-      if (selectedKeys.size === 0) return alert('No items selected for download! Scan products or use the checkbox on each item.');
-
-      const selectedRows = rawPendingData
-        .filter(r => selectedKeys.has(r._uid))
-        .map(r => {
-          return {
-            'Merge': r._merge,
-            'Variant': r._variant,
-            'Lotno': r._lotno,
-            'Weight': r._weight,
-            'Qnty': r._qnty,
-            'Category': r._category,
-            'Group': r._group,
-            'Setof': r._setof,
-            'STN No': r._stnNo,
-            'Docket No': r._docket,
-            'Location': r._location,
-            'Scanned': r._scanned
-          };
-        });
-
-      const ws = XLSX.utils.json_to_sheet(selectedRows, {
+      const ws = XLSX.utils.json_to_sheet(rows, {
         header: ['Merge', 'Variant', 'Lotno', 'Weight', 'Qnty', 'Category', 'Group', 'Setof', 'STN No', 'Docket No', 'Location', 'Scanned']
       });
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Pending");
-      XLSX.writeFile(wb, `Pending_Selected_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, "Pending_Scanned");
+      XLSX.writeFile(wb, `Inwarded_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
 
-    // Export PDF
-    function exportSelectedPDF() {
-      if (selectedKeys.size === 0) return alert('No items selected for PDF export! Scan products or use the checkbox on each item.');
+    // Helper to fetch images as Base64 for the PDF
+    async function getBase64Image(url) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        return null;
+      }
+    }
 
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF('landscape');
+    // PDF Download with high-res product images
+    async function exportPDF() {
+      if (scannedItems.length === 0) return alert('No items verified yet!');
 
-      doc.setFontSize(14);
-      doc.text("Selected Pending Stock Report", 14, 15);
-      doc.setFontSize(9);
-      doc.setTextColor(100);
-      doc.text(`Generated on: ${new Date().toLocaleString()} | Total Items: ${selectedKeys.size}`, 14, 21);
+      const btn = document.getElementById('pdfBtn');
+      const originalText = btn.innerText;
+      btn.innerText = "⏳ Generating PDF...";
+      btn.disabled = true;
 
-      const items = rawPendingData.filter(r => selectedKeys.has(r._uid));
-      const tableData = items.map((r, i) => [
-        i + 1,
-        r._merge,
-        r._variant,
-        r._lotno,
-        Number(r._weight).toFixed(3),
-        r._category,
-        r._group,
-        r._stnNo,
-        r._location
-      ]);
+      try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('portrait', 'pt', 'a4');
 
-      doc.autoTable({
-        head: [['#', 'Merge Code', 'Variant', 'Lot No', 'Weight (g)', 'Category', 'Group', 'STN No', 'Location']],
-        body: tableData,
-        startY: 26,
-        theme: 'striped',
-        styles: { fontSize: 8, cellPadding: 3 },
-        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
-        columnStyles: {
-          4: { fontStyle: 'bold', halign: 'right' }
-        }
-      });
+        doc.setFontSize(16);
+        doc.setTextColor(30, 41, 59);
+        doc.text("Inwarding Verification Report", 40, 40);
 
-      doc.save(`Pending_Selected_${new Date().toISOString().slice(0, 10)}.pdf`);
+        doc.setFontSize(9);
+        doc.setTextColor(100);
+        doc.text(`Generated: ${new Date().toLocaleString()} | Verified Items: ${scannedItems.length}`, 40, 56);
+
+        // Preload images as base64
+        const imageBase64List = await Promise.all(
+          scannedItems.map(item => getBase64Image(item.imgUrl))
+        );
+
+        const tableBody = scannedItems.map((item, idx) => [
+          idx + 1,
+          "", // Cell placeholder for image
+          item.variant,
+          item.lotno,
+          `${parseFloat(item.wt || 0).toFixed(3)}g`,
+          item.cat,
+          item.grp,
+          item.stn
+        ]);
+
+        doc.autoTable({
+          head: [['#', 'Image', 'Variant', 'Lot No', 'Weight', 'Category', 'Group', 'STN']],
+          body: tableBody,
+          startY: 70,
+          theme: 'grid',
+          styles: { fontSize: 8, valign: 'middle', halign: 'left' },
+          headStyles: { fillColor: [11, 19, 41], textColor: [255, 255, 255], fontStyle: 'bold' },
+          columnStyles: {
+            0: { cellWidth: 20 },
+            1: { cellWidth: 46, minCellHeight: 46 },
+            4: { fontStyle: 'bold' }
+          },
+          didDrawCell: function (data) {
+            if (data.column.index === 1 && data.cell.section === 'body') {
+              const base64 = imageBase64List[data.row.index];
+              if (base64) {
+                doc.addImage(base64, 'JPEG', data.cell.x + 3, data.cell.y + 3, 40, 40);
+              }
+            }
+          }
+        });
+
+        doc.save(`Inwarding_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+      } catch (err) {
+        console.error(err);
+        alert("Failed to compile PDF. Check browser console.");
+      } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
+        scanInput.focus();
+      }
     }
   </script>
 </body>
