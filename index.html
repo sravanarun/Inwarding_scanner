@@ -8,6 +8,8 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- jsPDF for 2x2 Grid Catalogue PDF Generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- HTML5 QR / PDF417 Mobile Camera Engine -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
   <style>
     :root {
@@ -30,19 +32,20 @@
 
     /* Auto-fetch banner / Local Override file picker */
     .file-box { width: 100%; max-width: 850px; background: var(--card-bg); padding: 10px 14px; border-radius: 8px; border: 1px dashed var(--border); text-align: center; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-    .source-status { font-size: 0.85rem; color: var(--text-muted); }
+    .source-status { font-size: 0.85rem; color: var(--text-muted); text-align: left; }
     .source-status b { color: var(--primary); }
-    .manual-upload-label { font-size: 0.82rem; color: var(--primary); cursor: pointer; text-decoration: underline; font-weight: 600; }
+    .manual-upload-label { font-size: 0.82rem; color: var(--primary); cursor: pointer; text-decoration: underline; font-weight: 600; white-space: nowrap; }
     .file-box input { display: none; }
 
     .status-bar { width: 100%; max-width: 850px; display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 12px; font-size: 0.88rem; flex-wrap: wrap; gap: 8px; }
     .pulse-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); margin-right: 8px; animation: blink 1.2s infinite; }
 
+    /* Scan Input & Mobile Camera Button Controls */
+    .scan-controls-container { width: 100%; max-width: 850px; display: flex; gap: 8px; margin-bottom: 14px; }
+    
     #scanInput {
-      width: 100%;
-      max-width: 850px;
+      flex: 1;
       padding: 13px;
-      margin-bottom: 14px;
       font-size: 1.15rem;
       font-weight: 700;
       color: var(--primary);
@@ -55,6 +58,137 @@
     }
     #scanInput::placeholder { color: #475569; font-weight: normal; font-size: 0.95rem; }
 
+    .btn-camera-trigger {
+      background: #0284c7;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0 16px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .btn-camera-trigger:hover { background: #0369a1; }
+
+    /* CAMERA SCANNER MODAL (Matching NAP POS Camera Design) */
+    .camera-modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(9, 14, 26, 0.96);
+      z-index: 99999;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
+    }
+    .camera-modal-overlay.active { display: flex; }
+
+    .scanner-viewport-box {
+      width: 100%;
+      max-width: 480px;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+    }
+
+    #cameraReaderView { width: 100%; min-height: 280px; background: #000; }
+    #cameraReaderView video { object-fit: cover !important; border-radius: 12px; }
+
+    /* The Nap-style Reticle Overlay */
+    .scanner-reticle-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      pointer-events: none;
+      padding: 16px 12px;
+    }
+
+    .reticle-tip {
+      background: rgba(15, 23, 42, 0.85);
+      color: #fff;
+      font-size: 0.76rem;
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    .target-slot {
+      width: 86%;
+      height: 90px;
+      position: relative;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 6px;
+    }
+
+    /* Green Corner Brackets */
+    .target-slot::before, .target-slot::after {
+      content: ""; position: absolute; width: 22px; height: 22px; border-color: #22c55e; border-style: solid;
+    }
+    .target-slot::before { top: 0; left: 0; border-width: 3px 0 0 3px; }
+    .target-slot::after { top: 0; right: 0; border-width: 3px 3px 0 0; }
+    
+    .target-corner-bottom-left { position: absolute; bottom: 0; left: 0; width: 22px; height: 22px; border-color: #22c55e; border-style: solid; border-width: 0 0 3px 3px; }
+    .target-corner-bottom-right { position: absolute; bottom: 0; right: 0; width: 22px; height: 22px; border-color: #22c55e; border-style: solid; border-width: 0 3px 3px 0; }
+
+    .format-label { color: #e2e8f0; font-size: 0.72rem; letter-spacing: 0.5px; opacity: 0.9; text-shadow: 0 1px 3px #000; }
+
+    .scanner-footer-cue {
+      background: #ffffff;
+      color: #1e293b;
+      font-size: 0.88rem;
+      font-weight: 600;
+      text-align: center;
+      padding: 12px 14px;
+      width: 100%;
+    }
+
+    .scanner-controls-bar {
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-stop-camera {
+      background: #ffffff;
+      color: #0f172a;
+      border: 1px solid #cbd5e1;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-torch-toggle {
+      background: #1e293b;
+      color: #38bdf8;
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Result Card */
     .card { width: 100%; max-width: 850px; border-radius: 12px; padding: 22px; text-align: center; min-height: 440px; display: flex; flex-direction: column; justify-content: center; }
     .card.idle { background: var(--card-bg); border: 2px solid #475569; }
     .card.found { background: #064e3b; border: 3px solid var(--accent); }
@@ -64,7 +198,6 @@
 
     .product-content { display: flex; align-items: stretch; justify-content: flex-start; gap: 24px; margin-top: 10px; width: 100%; }
     
-    /* Product image box with tap-to-zoom cue */
     .product-img-wrapper { 
       width: 450px; height: 450px; min-width: 450px; 
       border-radius: 12px; overflow: hidden; background: #fff; 
@@ -99,11 +232,9 @@
 
     .product-info-right { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: left; }
     
-    /* Display Hierarchy */
     .variant-header { font-size: 2rem; font-weight: 800; color: #fff; margin: 0 0 6px 0; line-height: 1.1; font-family: monospace; word-break: break-all; }
     .lot-label { font-size: 1.15rem; color: #cbd5e1; margin-bottom: 10px; font-family: monospace; }
     
-    /* Weight emphasis */
     .weight-highlight {
       font-size: 2.3rem;
       font-weight: 900;
@@ -118,7 +249,6 @@
     }
     .weight-unit { font-size: 1.1rem; font-weight: 700; color: var(--text-muted); margin-left: 4px; }
     
-    /* Neutral Category & Group */
     .neutral-row { color: var(--text-muted); font-size: 1rem; font-weight: 400; margin-top: 4px; }
     .neutral-row span { color: #cbd5e1; }
 
@@ -140,7 +270,7 @@
     .history-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
     .history-table tr:last-child td { border-bottom: none; }
 
-    /* Floating Lightbox Viewer */
+    /* Lightbox Modal */
     .lightbox-modal {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(4, 7, 15, 0.95); backdrop-filter: blur(8px);
@@ -202,7 +332,8 @@
       .neutral-row { font-size: 0.92rem; }
       
       .status-bar { font-size: 0.8rem; padding: 8px 12px; }
-      #scanInput { font-size: 1.05rem; padding: 11px; }
+      #scanInput { font-size: 1rem; padding: 10px; }
+      .btn-camera-trigger { font-size: 0.85rem; padding: 0 12px; }
 
       .history h4 { flex-direction: column; align-items: stretch; gap: 10px; }
       .btn-group { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
@@ -219,11 +350,11 @@
 
   <div class="header">
     <h2>Inwarding — PC Inspection Station</h2>
-    <p>Direct Scan Match • Catalogue Preview • 2x2 PDF Export</p>
+    <p>Direct Scan Match • Mobile Camera • 2x2 PDF Export</p>
   </div>
 
   <div class="file-box">
-    <div class="source-status" id="sourceStatus">⏳ Auto-connecting to repository dataset (<b>Product_receipt.xlsx</b>)...</div>
+    <div class="source-status" id="sourceStatus">⏳ Connecting to repository dataset (<b>Product_receipt.xlsx</b>)...</div>
     <div>
       <label for="excelInput" class="manual-upload-label">Load local file instead</label>
       <input type="file" id="excelInput" accept=".xlsx, .xls">
@@ -231,11 +362,15 @@
   </div>
 
   <div class="status-bar">
-    <div><span class="pulse-dot"></span><b>Scanner Gun:</b> Ready for Scans</div>
+    <div><span class="pulse-dot"></span><b>Scanner Gun / Camera:</b> Ready</div>
     <div>Database: <b id="dbCount">0</b> items | Checked: <b id="scanCount">0</b></div>
   </div>
 
-  <input type="text" id="scanInput" placeholder="Scan tag here (auto-submits and clears)..." autofocus autocomplete="off" />
+  <!-- Dual Input: Scanner Gun Box + Tap to Open Camera -->
+  <div class="scan-controls-container">
+    <input type="text" id="scanInput" placeholder="Scan tag or type here..." autofocus autocomplete="off" />
+    <button class="btn-camera-trigger" id="openCameraBtn" onclick="startMobileCamera()">📷 Camera</button>
+  </div>
 
   <div id="resultCard" class="card idle">
     <div id="statusText" class="status-text" style="color: #94a3b8;">Ready for Tag</div>
@@ -265,7 +400,7 @@
       </div>
     </div>
 
-    <div id="idleDetails" class="details" style="text-align: center; color: #94a3b8; margin-top: 20px;">Pull trigger on scanner gun or enter barcode to inspect</div>
+    <div id="idleDetails" class="details" style="text-align: center; color: #94a3b8; margin-top: 20px;">Pull trigger on scanner gun or tap Camera to scan jewellery tag</div>
     <div id="rawDisplay" class="raw-code"></div>
   </div>
 
@@ -296,6 +431,35 @@
           </tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- Mobile Camera Scanner Viewport (Matching POS/NAP UI) -->
+  <div class="camera-modal-overlay" id="cameraModal">
+    <div class="scanner-viewport-box">
+      <div id="cameraReaderView" onclick="triggerCameraRefocus()"></div>
+      
+      <!-- Reticle and Guides -->
+      <div class="scanner-reticle-overlay">
+        <div class="reticle-tip" onclick="triggerCameraRefocus()">Blurry? Tap the video to refocus</div>
+        
+        <div class="target-slot">
+          <div class="target-corner-bottom-left"></div>
+          <div class="target-corner-bottom-right"></div>
+          <span class="format-label">QR Code • PDF417</span>
+        </div>
+        
+        <div style="height: 10px;"></div>
+      </div>
+
+      <div class="scanner-footer-cue">
+        Point camera at QR or PDF417 barcode
+      </div>
+    </div>
+
+    <div class="scanner-controls-bar">
+      <button class="btn-torch-toggle" id="torchToggleBtn" onclick="toggleTorch()">🔦 Torch</button>
+      <button class="btn-stop-camera" onclick="stopMobileCamera()">🚫 Stop Scanning</button>
     </div>
   </div>
 
@@ -368,11 +532,17 @@
     const scanInput = document.getElementById('scanInput');
     let scanTimeout;
 
-    // Mobile / Desktop soft focus maintainer
+    // Mobile Camera State
+    let html5QrScanner = null;
+    let cameraTrack = null;
+    let isTorchOn = false;
+
+    // Focus keeper
     scanInput.addEventListener('blur', () => {
       setTimeout(() => {
         const isInteracting = document.activeElement.id === 'excelInput' || 
                               document.getElementById('pdfModal').classList.contains('active') ||
+                              document.getElementById('cameraModal').classList.contains('active') ||
                               document.getElementById('lightboxModal').classList.contains('active');
         if (!isInteracting) {
           scanInput.focus();
@@ -380,7 +550,7 @@
       }, 150);
     });
 
-    // AUTO-FETCH FROM GITHUB REPO ON PAGE LOAD
+    // Auto-fetch raw Excel file on load from repo
     window.addEventListener('DOMContentLoaded', () => {
       fetchAutoFile('Product_receipt.xlsx');
     });
@@ -389,19 +559,16 @@
       const statusEl = document.getElementById('sourceStatus');
       try {
         const response = await fetch(`${fileName}?t=${Date.now()}`);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const arrayBuffer = await response.arrayBuffer();
         parseWorkbookArray(new Uint8Array(arrayBuffer), fileName);
-        statusEl.innerHTML = `🟢 Loaded live repository file: <b>${fileName}</b> (${Object.keys(DB).length} products)`;
+        statusEl.innerHTML = `🟢 Loaded repository file: <b>${fileName}</b> (${Object.keys(DB).length} products)`;
       } catch (err) {
-        console.warn('Auto-fetch from repo did not find file:', err);
-        statusEl.innerHTML = `ℹ️ Place <b>${fileName}</b> in your GitHub repo, or upload manually via button.`;
+        console.warn('Auto-fetch:', err);
+        statusEl.innerHTML = `ℹ️ Place <b>${fileName}</b> in your GitHub repo, or load manually.`;
       }
     }
 
-    // Manual Upload Alternative
     document.getElementById('excelInput').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -421,7 +588,6 @@
       pendingSheetName = uploadedWorkbook.SheetNames.find(n => n.trim().toLowerCase() === 'pending') || uploadedWorkbook.SheetNames[0];
       const sheet = uploadedWorkbook.Sheets[pendingSheetName];
       
-      // Locate Scanned column
       const range = XLSX.utils.decode_range(sheet['!ref']);
       scannedColIndex = -1;
       for (let C = range.s.c; C <= range.e.c; ++C) {
@@ -449,7 +615,6 @@
       
       rows.forEach((r, idx) => {
         const rowIndex = idx + 1;
-        
         const getVal = (keys) => {
           for (const k of keys) {
             for (const rowKey of Object.keys(r)) {
@@ -493,7 +658,7 @@
       scanInput.focus();
     }
 
-    // Scanner Gun Keydown logic
+    // Hardware Scanner Gun Input logic
     scanInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault(); 
@@ -502,7 +667,6 @@
 
     scanInput.addEventListener('input', function() {
       clearTimeout(scanTimeout);
-      
       scanTimeout = setTimeout(function() {
         const val = scanInput.value.replace(/[\r\n\t\s]/g, '').trim();
         if (val.length > 0) {
@@ -512,6 +676,7 @@
       }, 150); 
     });
 
+    // Core Matching Engine
     function processCode(rawText) {
       const extractedKey = rawText.toUpperCase(); 
       
@@ -534,14 +699,12 @@
         statusText.innerText = "MATCH FOUND";
         statusText.style.color = "#34d399";
         
-        // Show fields in requested order
         document.getElementById('dispVariant').innerText = item.v || '---';
         document.getElementById('dispLot').innerText = item.l || '-';
         document.getElementById('dispWeight').innerText = parseFloat(item.w || 0).toFixed(3);
         document.getElementById('dispCat').innerText = item.c || '-';
         document.getElementById('dispGroup').innerText = item.g || '-';
 
-        // High-res Image Loading State
         const imgKey = (item.v && item.v.length >= 9) ? item.v.slice(2, 9).toUpperCase() : item.v.toUpperCase();
         const imgUrl = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${imgKey}.jpg`;
 
@@ -585,7 +748,108 @@
 
         productContent.style.display = 'none';
         idleDetails.style.display = 'block';
-        idleDetails.innerText = Object.keys(DB).length === 0 ? "Repository file loading or not uploaded yet!" : "This product does not match any record in the sheet.";
+        idleDetails.innerText = Object.keys(DB).length === 0 ? "Dataset not loaded yet! Verify file in repo or upload manually." : "This product does not match any record in the sheet.";
+      }
+    }
+
+    /* MOBILE CAMERA ENGINE WITH AUTOFOCUS & TORCH */
+    async function startMobileCamera() {
+      const modal = document.getElementById('cameraModal');
+      modal.classList.add('active');
+
+      if (!html5QrScanner) {
+        html5QrScanner = new Html5Qrcode("cameraReaderView");
+      }
+
+      // Configure specifically for QR Code and PDF417 tags with high scan frequency
+      const config = {
+        fps: 20,
+        qrbox: { width: 300, height: 110 },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.PDF_417,
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.DATA_MATRIX,
+          Html5QrcodeSupportedFormats.CODE_128
+        ],
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        }
+      };
+
+      try {
+        await html5QrScanner.start(
+          { facingMode: "environment" },
+          config,
+          (decodedText) => {
+            // When barcode scanned
+            if (decodedText) {
+              const cleanCode = decodedText.replace(/[\r\n\t\s]/g, '').trim();
+              processCode(cleanCode);
+              stopMobileCamera(); // Close camera view upon successful scan
+            }
+          },
+          (errorMessage) => {
+            // Ignore frame-by-frame parse misses
+          }
+        );
+
+        // Store video track for autofocus and torch handling
+        setTimeout(() => {
+          const videoEl = document.querySelector("#cameraReaderView video");
+          if (videoEl && videoEl.srcObject) {
+            const tracks = videoEl.srcObject.getVideoTracks();
+            if (tracks.length > 0) cameraTrack = tracks[0];
+          }
+        }, 800);
+
+      } catch (err) {
+        console.error("Camera start failed:", err);
+        alert("Camera error: Ensure camera permission is allowed and site is served over HTTPS or localhost.");
+        stopMobileCamera();
+      }
+    }
+
+    function stopMobileCamera() {
+      if (html5QrScanner) {
+        html5QrScanner.stop().then(() => {
+          document.getElementById('cameraModal').classList.remove('active');
+          cameraTrack = null;
+          isTorchOn = false;
+          scanInput.focus();
+        }).catch(() => {
+          document.getElementById('cameraModal').classList.remove('active');
+          scanInput.focus();
+        });
+      } else {
+        document.getElementById('cameraModal').classList.remove('active');
+      }
+    }
+
+    // Refocus handler when tapping video
+    function triggerCameraRefocus() {
+      if (cameraTrack && cameraTrack.applyConstraints) {
+        cameraTrack.applyConstraints({
+          advanced: [{ focusMode: "continuous" }]
+        }).catch(() => {});
+      }
+    }
+
+    // Torch / Flashlight toggle
+    async function toggleTorch() {
+      if (!cameraTrack) return;
+      try {
+        const capabilities = cameraTrack.getCapabilities ? cameraTrack.getCapabilities() : {};
+        if (capabilities.torch) {
+          isTorchOn = !isTorchOn;
+          await cameraTrack.applyConstraints({
+            advanced: [{ torch: isTorchOn }]
+          });
+          document.getElementById('torchToggleBtn').innerText = isTorchOn ? "💡 Torch ON" : "🔦 Torch";
+        } else {
+          alert("Flashlight / Torch not supported on this device's camera.");
+        }
+      } catch (e) {
+        console.warn("Torch failed:", e);
       }
     }
 
@@ -612,7 +876,6 @@
       document.getElementById('fallbackDesignTag').innerText = `Design: ${dCode || 'N/A'}`;
     }
 
-    // Lightbox modal operations
     function openLightbox() {
       if (!currentMatchedItem) return;
       const dCode = (currentMatchedItem.v && currentMatchedItem.v.length >= 9) ? currentMatchedItem.v.slice(2, 9).toUpperCase() : currentMatchedItem.v.toUpperCase();
@@ -630,6 +893,7 @@
       if (e.key === 'Escape') {
         closeLightbox();
         closePDFModal();
+        stopMobileCamera();
       }
     });
 
@@ -652,12 +916,9 @@
       `).join('');
     }
 
-    // Export Excel: Preserves all original rows from the raw file,
-    // only setting Scanned = 'Yes' for scanned items and 'No' for the rest.
+    // Export Excel preserving original rows and updating Scanned column
     function exportExcel() {
-      if (!uploadedWorkbook) {
-        return alert('Dataset is not loaded yet!');
-      }
+      if (!uploadedWorkbook) return alert('Dataset is not loaded yet!');
 
       const sheet = uploadedWorkbook.Sheets[pendingSheetName];
       const range = XLSX.utils.decode_range(sheet['!ref']);
@@ -742,12 +1003,10 @@
           const x = startX + col * (cardWidth + gapX);
           const y = startY + row * (cardHeight + gapY);
 
-          // Card Background & Border
           doc.setFillColor(255, 255, 255);
           doc.setDrawColor(220, 226, 235);
           doc.roundedRect(x, y, cardWidth, cardHeight, 6, 6, 'FD');
 
-          // Centered Product Image Box
           const imgBoxW = cardWidth - 20;
           const imgBoxH = 220;
           const imgX = x + 10;
@@ -763,7 +1022,6 @@
             doc.text("Image not available", imgX + imgBoxW / 2, imgY + imgBoxH / 2, { align: 'center' });
           }
 
-          // Card Metadata
           let textY = y + 245;
 
           if (incVariant) {
