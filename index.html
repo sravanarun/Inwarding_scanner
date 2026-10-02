@@ -273,6 +273,12 @@
   </div>
 
   <script>
+    let uploadedWorkbook = null;
+    let pendingSheetName = 'Pending';
+    let scannedRowIndices = new Set();
+    let scannedColIndex = -1;
+    let originalFileName = 'Product_receipt.xlsx';
+
     let DB = {};
     let LotDB = {};
     let scannedItems = [];
@@ -293,19 +299,45 @@
     document.getElementById('excelInput').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
+      originalFileName = file.name;
       const reader = new FileReader();
       reader.onload = function(evt) {
         const data = new Uint8Array(evt.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
+        uploadedWorkbook = XLSX.read(data, { type: 'array', cellFormula: true, cellStyles: true });
         
-        let sheetName = workbook.SheetNames.find(n => n.trim().toLowerCase() === 'pending') || workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
+        pendingSheetName = uploadedWorkbook.SheetNames.find(n => n.trim().toLowerCase() === 'pending') || uploadedWorkbook.SheetNames[0];
+        const sheet = uploadedWorkbook.Sheets[pendingSheetName];
+        
+        // Find column index for 'Scanned' in header row (Row 0 in 0-indexed coords)
+        const range = XLSX.utils.decode_range(sheet['!ref']);
+        scannedColIndex = -1;
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cellAddress = XLSX.utils.encode_cell({ r: range.s.r, c: C });
+          const cell = sheet[cellAddress];
+          if (cell && String(cell.v).trim().toLowerCase() === 'scanned') {
+            scannedColIndex = C;
+            break;
+          }
+        }
+        // If not found, use next column after header
+        if (scannedColIndex === -1) {
+          scannedColIndex = range.e.c + 1;
+          const headerCell = XLSX.utils.encode_cell({ r: range.s.r, c: scannedColIndex });
+          sheet[headerCell] = { t: 's', v: 'Scanned' };
+          range.e.c = scannedColIndex;
+          sheet['!ref'] = XLSX.utils.encode_range(range);
+        }
+
         const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
         
         DB = {};
         LotDB = {};
+        scannedItems = [];
+        scannedRowIndices.clear();
         
-        rows.forEach(r => {
+        rows.forEach((r, idx) => {
+          const rowIndex = idx + 1; // Row 1 is header, so data begins at Row 2 (0-indexed: idx + 1)
+          
           const getVal = (keys) => {
             for (const k of keys) {
               for (const rowKey of Object.keys(r)) {
@@ -335,6 +367,7 @@
             stn: getVal(['STN No', 'STN', 'STNNO']),
             docket: getVal(['Docket No', 'Docket']),
             loc: getVal(['Location', 'LOC']),
+            rowIndex: rowIndex,
             rawRow: r
           };
 
@@ -343,7 +376,9 @@
         });
 
         document.getElementById('dbCount').innerText = Object.keys(DB).length;
-        alert(`Loaded ${Object.keys(DB).length} products successfully from sheet: ${sheetName}`);
+        document.getElementById('scanCount').innerText = 0;
+        updateHistoryUI();
+        alert(`Loaded ${Object.keys(DB).length} products successfully from sheet: ${pendingSheetName}`);
         scanInput.focus();
       };
       reader.readAsArrayBuffer(file);
@@ -412,6 +447,9 @@
 
         productContent.style.display = 'flex';
         idleDetails.style.display = 'none';
+
+        // Mark as scanned
+        scannedRowIndices.add(item.rowIndex);
 
         if (!scannedItems.some(x => x.key === item.merge)) {
           scannedItems.unshift({ 
@@ -486,30 +524,26 @@
       `).join('');
     }
 
+    // Export Excel: Preserves all 100+ original rows from the uploaded file,
+    // only setting Scanned = 'Yes' for the scanned ones and 'No' for the rest.
     function exportExcel() {
-      if (scannedItems.length === 0) return alert('No items verified yet!');
-      
-      const rows = scannedItems.map(i => ({
-        'Merge': i.key,
-        'Variant': i.variant,
-        'Lotno': i.lotno,
-        'Weight': parseFloat(i.wt) || 0,
-        'Qnty': i.qnty,
-        'Category': i.cat,
-        'Group': i.grp,
-        'Setof': i.setof,
-        'STN No': i.stn,
-        'Docket No': i.docket,
-        'Location': i.loc,
-        'Scanned': 'Yes'
-      }));
+      if (!uploadedWorkbook) {
+        return alert('Please upload your Excel file first!');
+      }
 
-      const ws = XLSX.utils.json_to_sheet(rows, {
-        header: ['Merge', 'Variant', 'Lotno', 'Weight', 'Qnty', 'Category', 'Group', 'Setof', 'STN No', 'Docket No', 'Location', 'Scanned']
-      });
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Pending_Scanned");
-      XLSX.writeFile(wb, `Inwarded_${new Date().toISOString().slice(0,10)}.xlsx`);
+      const sheet = uploadedWorkbook.Sheets[pendingSheetName];
+      const range = XLSX.utils.decode_range(sheet['!ref']);
+
+      // Iterate through all data rows (starting row 1 after header row 0)
+      for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+        const cellAddress = XLSX.utils.encode_cell({ r: R, c: scannedColIndex });
+        const isScanned = scannedRowIndices.has(R);
+        sheet[cellAddress] = { t: 's', v: isScanned ? 'Yes' : 'No' };
+      }
+
+      const baseName = originalFileName.replace(/\.[^/.]+$/, "");
+      const outputName = `${baseName}_Inwarded_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(uploadedWorkbook, outputName);
     }
 
     // Modal controls for 2x2 PDF
@@ -556,10 +590,7 @@
 
       try {
         const { jsPDF } = window.jspdf;
-        // Standard A4 dimensions in points: 595.28 x 841.89
         const doc = new jsPDF('portrait', 'pt', 'a4');
-        const pageWidth = 595.28;
-        const pageHeight = 841.89;
 
         // Card Grid Dimensions
         const cardWidth = 265;
