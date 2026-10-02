@@ -28,8 +28,11 @@
     .header h2 { margin: 0 0 4px 0; font-size: 1.55rem; color: var(--primary); }
     .header p { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
 
-    .file-box { width: 100%; max-width: 850px; background: var(--card-bg); padding: 12px; border-radius: 8px; border: 1px dashed var(--primary); text-align: center; margin-bottom: 12px; }
-    .file-box label { font-size: 0.88rem; color: var(--primary); cursor: pointer; display: block; font-weight: 600; word-break: break-word; }
+    /* Auto-fetch banner / Local Override file picker */
+    .file-box { width: 100%; max-width: 850px; background: var(--card-bg); padding: 10px 14px; border-radius: 8px; border: 1px dashed var(--border); text-align: center; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .source-status { font-size: 0.85rem; color: var(--text-muted); }
+    .source-status b { color: var(--primary); }
+    .manual-upload-label { font-size: 0.82rem; color: var(--primary); cursor: pointer; text-decoration: underline; font-weight: 600; }
     .file-box input { display: none; }
 
     .status-bar { width: 100%; max-width: 850px; display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 12px; font-size: 0.88rem; flex-wrap: wrap; gap: 8px; }
@@ -179,7 +182,7 @@
     .btn-cancel { background: #334155; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
     .btn-generate { background: #2563eb; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.85rem; }
 
-    /* Mobile Responsive Rules (Adaptive 1-column layout like South1) */
+    /* Mobile Responsive Rules */
     @media (max-width: 768px) {
       body { padding: 10px 8px 30px 8px; }
       .header h2 { font-size: 1.35rem; }
@@ -220,8 +223,11 @@
   </div>
 
   <div class="file-box">
-    <label for="excelInput">📂 Click here to load Inwarding Excel (Product_receipt.xlsx)</label>
-    <input type="file" id="excelInput" accept=".xlsx, .xls">
+    <div class="source-status" id="sourceStatus">⏳ Auto-connecting to repository dataset (<b>Product_receipt.xlsx</b>)...</div>
+    <div>
+      <label for="excelInput" class="manual-upload-label">Load local file instead</label>
+      <input type="file" id="excelInput" accept=".xlsx, .xls">
+    </div>
   </div>
 
   <div class="status-bar">
@@ -374,93 +380,118 @@
       }, 150);
     });
 
-    // Handle excel upload from the Pending sheet
+    // AUTO-FETCH FROM GITHUB REPO ON PAGE LOAD
+    window.addEventListener('DOMContentLoaded', () => {
+      fetchAutoFile('Product_receipt.xlsx');
+    });
+
+    async function fetchAutoFile(fileName) {
+      const statusEl = document.getElementById('sourceStatus');
+      try {
+        const response = await fetch(`${fileName}?t=${Date.now()}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        parseWorkbookArray(new Uint8Array(arrayBuffer), fileName);
+        statusEl.innerHTML = `🟢 Loaded live repository file: <b>${fileName}</b> (${Object.keys(DB).length} products)`;
+      } catch (err) {
+        console.warn('Auto-fetch from repo did not find file:', err);
+        statusEl.innerHTML = `ℹ️ Place <b>${fileName}</b> in your GitHub repo, or upload manually via button.`;
+      }
+    }
+
+    // Manual Upload Alternative
     document.getElementById('excelInput').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
       originalFileName = file.name;
       const reader = new FileReader();
       reader.onload = function(evt) {
-        const data = new Uint8Array(evt.target.result);
-        uploadedWorkbook = XLSX.read(data, { type: 'array', cellFormula: true, cellStyles: true });
-        
-        pendingSheetName = uploadedWorkbook.SheetNames.find(n => n.trim().toLowerCase() === 'pending') || uploadedWorkbook.SheetNames[0];
-        const sheet = uploadedWorkbook.Sheets[pendingSheetName];
-        
-        // Find column index for 'Scanned' in header row
-        const range = XLSX.utils.decode_range(sheet['!ref']);
-        scannedColIndex = -1;
-        for (let C = range.s.c; C <= range.e.c; ++C) {
-          const cellAddress = XLSX.utils.encode_cell({ r: range.s.r, c: C });
-          const cell = sheet[cellAddress];
-          if (cell && String(cell.v).trim().toLowerCase() === 'scanned') {
-            scannedColIndex = C;
-            break;
-          }
-        }
-        if (scannedColIndex === -1) {
-          scannedColIndex = range.e.c + 1;
-          const headerCell = XLSX.utils.encode_cell({ r: range.s.r, c: scannedColIndex });
-          sheet[headerCell] = { t: 's', v: 'Scanned' };
-          range.e.c = scannedColIndex;
-          sheet['!ref'] = XLSX.utils.encode_range(range);
-        }
-
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-        
-        DB = {};
-        LotDB = {};
-        scannedItems = [];
-        scannedRowIndices.clear();
-        
-        rows.forEach((r, idx) => {
-          const rowIndex = idx + 1;
-          
-          const getVal = (keys) => {
-            for (const k of keys) {
-              for (const rowKey of Object.keys(r)) {
-                if (rowKey.trim().toLowerCase() === k.toLowerCase()) return String(r[rowKey] || '').trim();
-              }
-            }
-            return '';
-          };
-
-          const variant = getVal(['Variant', 'Variant Code', 'SKU']);
-          const lotno = getVal(['Lotno', 'Lot Number', 'Lot No']);
-          let mergeKey = getVal(['Merge', '23 Digit code', '23 DIGIT CODE']);
-
-          if (!mergeKey || mergeKey.startsWith('=')) {
-            mergeKey = `${variant}${lotno}`;
-          }
-
-          const itemObj = {
-            merge: mergeKey,
-            v: variant,
-            l: lotno,
-            w: getVal(['Weight', 'WT', 'Gross Wt']),
-            q: getVal(['Qnty', 'Qty']) || 1,
-            c: getVal(['Category', 'Final Category']),
-            g: getVal(['Group', 'Final Group']),
-            setof: getVal(['Setof', 'Set Of']) || '-',
-            stn: getVal(['STN No', 'STN', 'STNNO']),
-            docket: getVal(['Docket No', 'Docket']),
-            loc: getVal(['Location', 'LOC']),
-            rowIndex: rowIndex,
-            rawRow: r
-          };
-
-          if (mergeKey) DB[mergeKey.toUpperCase()] = itemObj;
-          if (lotno) LotDB[lotno.toUpperCase()] = itemObj;
-        });
-
-        document.getElementById('dbCount').innerText = Object.keys(DB).length;
-        document.getElementById('scanCount').innerText = 0;
-        updateHistoryUI();
-        alert(`Loaded ${Object.keys(DB).length} products successfully from sheet: ${pendingSheetName}`);
-        scanInput.focus();
+        parseWorkbookArray(new Uint8Array(evt.target.result), file.name);
+        document.getElementById('sourceStatus').innerHTML = `🟢 Loaded local file: <b>${file.name}</b> (${Object.keys(DB).length} products)`;
       };
       reader.readAsArrayBuffer(file);
     });
+
+    function parseWorkbookArray(uint8Data, fileName) {
+      originalFileName = fileName;
+      uploadedWorkbook = XLSX.read(uint8Data, { type: 'array', cellFormula: true, cellStyles: true });
+      
+      pendingSheetName = uploadedWorkbook.SheetNames.find(n => n.trim().toLowerCase() === 'pending') || uploadedWorkbook.SheetNames[0];
+      const sheet = uploadedWorkbook.Sheets[pendingSheetName];
+      
+      // Locate Scanned column
+      const range = XLSX.utils.decode_range(sheet['!ref']);
+      scannedColIndex = -1;
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cellAddress = XLSX.utils.encode_cell({ r: range.s.r, c: C });
+        const cell = sheet[cellAddress];
+        if (cell && String(cell.v).trim().toLowerCase() === 'scanned') {
+          scannedColIndex = C;
+          break;
+        }
+      }
+      if (scannedColIndex === -1) {
+        scannedColIndex = range.e.c + 1;
+        const headerCell = XLSX.utils.encode_cell({ r: range.s.r, c: scannedColIndex });
+        sheet[headerCell] = { t: 's', v: 'Scanned' };
+        range.e.c = scannedColIndex;
+        sheet['!ref'] = XLSX.utils.encode_range(range);
+      }
+
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      
+      DB = {};
+      LotDB = {};
+      scannedItems = [];
+      scannedRowIndices.clear();
+      
+      rows.forEach((r, idx) => {
+        const rowIndex = idx + 1;
+        
+        const getVal = (keys) => {
+          for (const k of keys) {
+            for (const rowKey of Object.keys(r)) {
+              if (rowKey.trim().toLowerCase() === k.toLowerCase()) return String(r[rowKey] || '').trim();
+            }
+          }
+          return '';
+        };
+
+        const variant = getVal(['Variant', 'Variant Code', 'SKU']);
+        const lotno = getVal(['Lotno', 'Lot Number', 'Lot No']);
+        let mergeKey = getVal(['Merge', '23 Digit code', '23 DIGIT CODE']);
+
+        if (!mergeKey || mergeKey.startsWith('=')) {
+          mergeKey = `${variant}${lotno}`;
+        }
+
+        const itemObj = {
+          merge: mergeKey,
+          v: variant,
+          l: lotno,
+          w: getVal(['Weight', 'WT', 'Gross Wt']),
+          q: getVal(['Qnty', 'Qty']) || 1,
+          c: getVal(['Category', 'Final Category']),
+          g: getVal(['Group', 'Final Group']),
+          setof: getVal(['Setof', 'Set Of']) || '-',
+          stn: getVal(['STN No', 'STN', 'STNNO']),
+          docket: getVal(['Docket No', 'Docket']),
+          loc: getVal(['Location', 'LOC']),
+          rowIndex: rowIndex,
+          rawRow: r
+        };
+
+        if (mergeKey) DB[mergeKey.toUpperCase()] = itemObj;
+        if (lotno) LotDB[lotno.toUpperCase()] = itemObj;
+      });
+
+      document.getElementById('dbCount').innerText = Object.keys(DB).length;
+      document.getElementById('scanCount').innerText = 0;
+      updateHistoryUI();
+      scanInput.focus();
+    }
 
     // Scanner Gun Keydown logic
     scanInput.addEventListener('keydown', function(e) {
@@ -554,7 +585,7 @@
 
         productContent.style.display = 'none';
         idleDetails.style.display = 'block';
-        idleDetails.innerText = Object.keys(DB).length === 0 ? "Please upload your Excel file first using the box above!" : "This product does not match any record in the sheet.";
+        idleDetails.innerText = Object.keys(DB).length === 0 ? "Repository file loading or not uploaded yet!" : "This product does not match any record in the sheet.";
       }
     }
 
@@ -621,10 +652,11 @@
       `).join('');
     }
 
-    // Export Excel preserving original rows and updating Scanned column
+    // Export Excel: Preserves all original rows from the raw file,
+    // only setting Scanned = 'Yes' for scanned items and 'No' for the rest.
     function exportExcel() {
       if (!uploadedWorkbook) {
-        return alert('Please upload your Excel file first!');
+        return alert('Dataset is not loaded yet!');
       }
 
       const sheet = uploadedWorkbook.Sheets[pendingSheetName];
