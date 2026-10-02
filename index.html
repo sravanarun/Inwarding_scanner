@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>PC Barcode Inwarding Scanner</title>
-  <!-- Excel Parser -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- jsPDF & AutoTable for PDF Generation with Images -->
+  <!-- jsPDF & AutoTable for PDF Generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.3/dist/jspdf.plugin.autotable.min.js"></script>
 
@@ -60,13 +59,14 @@
 
     .product-info-right { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: left; }
     
+    /* Variant as Header */
     .req-box { font-size: 2.2rem; font-weight: 800; color: #fff; margin: 0 0 10px 0; line-height: 1.1; font-family: monospace; }
     
-    .details { font-size: 1.1rem; color: #f8fafc; line-height: 1.6; }
+    .details { font-size: 1.15rem; color: #f8fafc; line-height: 1.6; }
     
-    /* Weight emphasis: standout & bold */
+    /* Weight emphasis: bold & standing out */
     .weight-highlight {
-      font-size: 2.3rem;
+      font-size: 2.4rem;
       font-weight: 900;
       color: #38bdf8;
       background: #0f172a;
@@ -79,9 +79,9 @@
     }
     .weight-unit { font-size: 1.1rem; font-weight: 700; color: #94a3b8; margin-left: 4px; }
     
-    /* Neutral text for others */
-    .neutral-row { color: #94a3b8; font-size: 1rem; font-weight: 400; margin-top: 4px; }
-    .neutral-row span { color: #cbd5e1; }
+    /* Neutral, plain for others */
+    .neutral-item { color: #94a3b8; font-size: 1rem; font-weight: 400; margin-top: 4px; }
+    .neutral-item span { color: #cbd5e1; }
 
     .raw-code { font-family: monospace; font-size: 0.85rem; color: #94a3b8; word-break: break-all; margin-top: 14px; }
 
@@ -107,7 +107,7 @@
 
   <div class="header">
     <h2>Inwarding — PC Inspection Station</h2>
-    <p>Direct Barcode Scan • Verification Match • High-Res Image</p>
+    <p>Direct Scan Match • High-Res Verification Image</p>
   </div>
 
   <div class="file-box">
@@ -173,11 +173,12 @@
 
   <script>
     let DB = {};
+    let LotDB = {};
     let scannedItems = [];
     const scanInput = document.getElementById('scanInput');
     let scanTimeout;
 
-    // Maintain focus on scanner gun input
+    // Keep focus permanently on the scan input
     scanInput.addEventListener('blur', () => {
       setTimeout(() => {
         if (document.activeElement.id !== 'excelInput') {
@@ -191,7 +192,7 @@
       document.getElementById('noImgText').style.display = 'block';
     }
 
-    // Load specifically from "Pending" sheet and match headers
+    // Load specifically from "Pending" sheet
     document.getElementById('excelInput').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -200,17 +201,14 @@
         const data = new Uint8Array(evt.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
         
-        // Strictly target the "Pending" sheet
-        let sheetName = workbook.SheetNames.find(n => n.trim().toLowerCase() === 'pending');
-        if (!sheetName) {
-          alert('Sheet "Pending" not found! Defaulting to first available sheet: ' + workbook.SheetNames[0]);
-          sheetName = workbook.SheetNames[0];
-        }
-        
+        // Target Pending sheet
+        let sheetName = workbook.SheetNames.find(n => n.trim().toLowerCase() === 'pending') || workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
         
         DB = {};
+        LotDB = {};
+        
         rows.forEach(r => {
           const getVal = (keys) => {
             for (const k of keys) {
@@ -225,31 +223,36 @@
           const lotno = getVal(['Lotno', 'Lot Number', 'Lot No']);
           let mergeKey = getVal(['Merge', '23 Digit code', '23 DIGIT CODE']);
 
-          // Fallback if formula not pre-calculated
+          // If formula wasn't evaluated or column empty, concatenate variant + lotno
           if (!mergeKey || mergeKey.startsWith('=')) {
             mergeKey = `${variant}${lotno}`;
           }
 
+          const itemObj = {
+            merge: mergeKey,
+            v: variant,
+            l: lotno,
+            w: getVal(['Weight', 'WT', 'Gross Wt']),
+            q: getVal(['Qnty', 'Qty']) || 1,
+            c: getVal(['Category', 'Final Category']),
+            g: getVal(['Group', 'Final Group']),
+            setof: getVal(['Setof', 'Set Of']) || '-',
+            stn: getVal(['STN No', 'STN', 'STNNO']),
+            docket: getVal(['Docket No', 'Docket']),
+            loc: getVal(['Location', 'LOC']),
+            rawRow: r
+          };
+
           if (mergeKey) {
-            DB[mergeKey.toUpperCase()] = {
-              merge: mergeKey,
-              v: variant,
-              l: lotno,
-              w: getVal(['Weight', 'WT', 'Gross Wt']),
-              q: getVal(['Qnty', 'Qty']) || 1,
-              c: getVal(['Category', 'Final Category']),
-              g: getVal(['Group', 'Final Group']),
-              setof: getVal(['Setof', 'Set Of']) || '-',
-              stn: getVal(['STN No', 'STN', 'STNNO']),
-              docket: getVal(['Docket No', 'Docket']),
-              loc: getVal(['Location', 'LOC']),
-              rawRow: r
-            };
+            DB[mergeKey.toUpperCase()] = itemObj;
+          }
+          if (lotno) {
+            LotDB[lotno.toUpperCase()] = itemObj;
           }
         });
 
         document.getElementById('dbCount').innerText = Object.keys(DB).length;
-        alert(`Loaded ${Object.keys(DB).length} products successfully from Pending sheet.`);
+        alert(`Loaded ${Object.keys(DB).length} products successfully from sheet: ${sheetName}`);
         scanInput.focus();
       };
       reader.readAsArrayBuffer(file);
@@ -277,21 +280,21 @@
       } catch(e) {}
     }
 
+    // ORIGINAL SCANNER LOGIC:
+    // Do NOT clear or submit early on Enter/Tab. Barcode scanners send Tab or Enter between
+    // Variant and Lotno. Suppressing both allows the entire 23 digits to assemble in the input.
     scanInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault(); 
-        const val = scanInput.value.trim();
-        if (val.length > 0) {
-          processCode(val);
-          scanInput.value = "";
-        }
       }
     });
 
     scanInput.addEventListener('input', function() {
       clearTimeout(scanTimeout);
+      
       scanTimeout = setTimeout(function() {
-        const val = scanInput.value.trim();
+        // Strip any whitespace, tabs, or newlines injected by the scanner hardware
+        const val = scanInput.value.replace(/[\r\n\t\s]/g, '').trim();
         if (val.length > 0) {
           processCode(val);
           scanInput.value = ""; 
@@ -300,7 +303,7 @@
     });
 
     function processCode(rawText) {
-      const extractedKey = rawText.trim().toUpperCase(); 
+      const extractedKey = rawText.toUpperCase(); 
       
       const card = document.getElementById('resultCard');
       const statusText = document.getElementById('statusText');
@@ -314,18 +317,19 @@
 
       rawDisplay.innerText = `Full Scanned Code: ${rawText}`;
 
-      // Direct Lookup with Merge Key
-      if (DB[extractedKey]) {
-        const item = DB[extractedKey];
+      // 1. Direct match on Merge (Variant + Lotno)
+      // 2. Fallback match on Lot Number directly if scanner omitted the variant
+      const item = DB[extractedKey] || LotDB[extractedKey];
+
+      if (item) {
         playBeep(true);
         card.className = "card found";
         statusText.innerText = "MATCH FOUND";
         statusText.style.color = "#34d399";
         
-        // 1. Variant as major header
+        // 1. Variant as header
         reqDisplay.innerText = item.v || '---';
 
-        // High-res Image URL
         const imgKey = (item.v && item.v.length >= 9) ? item.v.slice(2, 9).toUpperCase() : item.v.toUpperCase();
         const imgUrl = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${imgKey}.jpg`;
 
@@ -333,22 +337,22 @@
         noImgText.style.display = 'none';
         productImg.src = imgUrl;
 
-        // Details order: Lot No -> Weight (Bold/Standout) -> Category & Group (Neutral)
+        // Details: Lotno -> Weight (Bold/Prominent) -> Category & Group (Neutral)
         itemDetails.innerHTML = `
-          <div style="color:#cbd5e1; font-family: monospace; font-size: 1.15rem; margin-bottom: 4px;"><b>Lot No:</b> ${item.l || '-'}</div>
+          <div style="color:#cbd5e1; font-family: monospace; font-size: 1.15rem; margin-bottom: 4px;">Lot No: ${item.l || '-'}</div>
           <div>
             <div class="weight-highlight">${parseFloat(item.w || 0).toFixed(3)}<span class="weight-unit">g</span></div>
           </div>
-          <div class="neutral-row">Category: <span>${item.c || '-'}</span></div>
-          <div class="neutral-row">Group: <span>${item.g || '-'}</span></div>
+          <div class="neutral-item">Category: <span>${item.c || '-'}</span></div>
+          <div class="neutral-item">Group: <span>${item.g || '-'}</span></div>
         `;
 
         productContent.style.display = 'flex';
         idleDetails.style.display = 'none';
 
-        if (!scannedItems.some(x => x.key === extractedKey)) {
+        if (!scannedItems.some(x => x.key === item.merge)) {
           scannedItems.unshift({ 
-            key: extractedKey, 
+            key: item.merge, 
             variant: item.v,
             lotno: item.l,
             wt: item.w,
@@ -398,7 +402,7 @@
       `).join('');
     }
 
-    // Export Excel formatted exactly like the uploaded file
+    // Export Excel formatted with original headers and column order
     function exportExcel() {
       if (scannedItems.length === 0) return alert('No items verified yet!');
       
@@ -442,7 +446,7 @@
       }
     }
 
-    // PDF Download with high-res product images
+    // Export PDF with high-res product images
     async function exportPDF() {
       if (scannedItems.length === 0) return alert('No items verified yet!');
 
@@ -504,7 +508,7 @@
         doc.save(`Inwarding_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
       } catch (err) {
         console.error(err);
-        alert("Failed to compile PDF. Check browser console.");
+        alert("Failed to generate PDF. Check browser console.");
       } finally {
         btn.innerText = originalText;
         btn.disabled = false;
