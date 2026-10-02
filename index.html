@@ -3,946 +3,989 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>PC & Mobile Inwarding Scanner</title>
-  <!-- Excel Parser -->
+  <title>South1 Catalogue</title>
+  <!-- Decompression & Decryption Engines -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- jsPDF for 2x2 Grid Catalogue PDF Generation -->
+  <!-- PDF Generation Engine -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <!-- HTML5 QR / PDF417 Mobile Camera Engine -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-
   <style>
     :root {
-      --bg: #0b1329;
-      --card-bg: #1e293b;
-      --border: #334155;
+      --bg: #090e1a;
+      --card-bg: #131c2e;
+      --panel-bg: #0f172a;
+      --border: #22324e;
       --primary: #38bdf8;
+      --primary-hover: #0284c7;
       --accent: #10b981;
-      --danger: #ef4444;
-      --text: #f8fafc;
+      --text: #f1f5f9;
       --text-muted: #94a3b8;
     }
-
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
-    body { background: var(--bg); color: var(--text); margin: 0; padding: 16px 14px 80px 14px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-    
-    .header { width: 100%; max-width: 850px; text-align: center; margin-bottom: 12px; }
-    .header h2 { margin: 0 0 4px 0; font-size: 1.55rem; color: var(--primary); }
-    .header p { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+    body { background: var(--bg); color: var(--text); margin: 0; padding: 12px 14px 80px 14px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
 
-    /* Auto-fetch banner / Local Override file picker */
-    .file-box { width: 100%; max-width: 850px; background: var(--card-bg); padding: 10px 14px; border-radius: 8px; border: 1px dashed var(--border); text-align: center; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-    .source-status { font-size: 0.85rem; color: var(--text-muted); text-align: left; }
-    .source-status b { color: var(--primary); }
-    .manual-upload-label { font-size: 0.82rem; color: var(--primary); cursor: pointer; text-decoration: underline; font-weight: 600; white-space: nowrap; }
-    .file-box input { display: none; }
-
-    .status-bar { width: 100%; max-width: 850px; display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 12px; font-size: 0.88rem; flex-wrap: wrap; gap: 8px; }
-    .pulse-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); margin-right: 8px; animation: blink 1.2s infinite; }
-
-    /* Scan Input & Mobile Camera Button Controls */
-    .scan-controls-container { width: 100%; max-width: 850px; display: flex; gap: 8px; margin-bottom: 14px; }
-    
-    #scanInput {
-      flex: 1;
-      padding: 13px;
-      font-size: 1.15rem;
-      font-weight: 700;
-      color: var(--primary);
-      background: #111c38;
-      border: 2px solid var(--primary);
-      border-radius: 8px;
-      text-align: center;
-      outline: none;
-      box-shadow: 0 4px 12px rgba(56, 189, 248, 0.15);
+    /* Security Passcode Modal */
+    #authOverlay {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(9, 14, 26, 0.98); z-index: 99999; display: flex;
+      align-items: center; justify-content: center; flex-direction: column;
     }
-    #scanInput::placeholder { color: #475569; font-weight: normal; font-size: 0.95rem; }
-
-    .btn-camera-trigger {
-      background: #0284c7;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      padding: 0 16px;
-      font-size: 0.95rem;
-      font-weight: 700;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-    }
-    .btn-camera-trigger:hover { background: #0369a1; }
-
-    /* Floating Thumb-Friendly Mobile Scan Bar */
-    .mobile-floating-bar {
-      display: none;
-      position: fixed;
-      bottom: 14px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: calc(100% - 24px);
-      max-width: 440px;
-      background: rgba(15, 23, 42, 0.92);
-      backdrop-filter: blur(10px);
-      border: 1px solid var(--primary);
-      padding: 8px 12px;
-      border-radius: 12px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
-      z-index: 1000;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-    }
-    .btn-floating-camera {
-      flex: 1;
-      background: #0284c7;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      padding: 12px;
-      font-size: 0.95rem;
-      font-weight: 700;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-
-    /* CAMERA SCANNER MODAL (Matching NAP POS Camera Design) */
-    .camera-modal-overlay {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(9, 14, 26, 0.96);
-      z-index: 99999;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 14px;
-    }
-    .camera-modal-overlay.active { display: flex; }
-
-    .scanner-viewport-box {
-      width: 100%;
-      max-width: 480px;
-      background: #000;
-      border-radius: 12px;
-      overflow: hidden;
-      position: relative;
-      border: 1px solid var(--border);
+    .auth-card {
+      background: #131c2e; border: 1px solid var(--border); padding: 26px;
+      border-radius: 12px; max-width: 360px; width: 90%; text-align: center;
       box-shadow: 0 20px 40px rgba(0,0,0,0.8);
     }
-
-    #cameraReaderView { width: 100%; min-height: 280px; background: #000; }
-    #cameraReaderView video { object-fit: cover !important; border-radius: 12px; }
-
-    .scanner-reticle-overlay {
-      position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: space-between;
-      pointer-events: none;
-      padding: 16px 12px;
+    .auth-card h3 { color: var(--primary); margin: 0 0 8px 0; }
+    .auth-card p { color: var(--text-muted); font-size: 0.82rem; margin: 0 0 18px 0; }
+    .auth-input {
+      width: 100%; padding: 12px; background: #090e1a; border: 1px solid #334155;
+      color: #fff; border-radius: 6px; font-size: 1.1rem; text-align: center;
+      letter-spacing: 2px; outline: none; margin-bottom: 12px;
     }
-
-    .reticle-tip {
-      background: rgba(15, 23, 42, 0.85);
-      color: #fff;
-      font-size: 0.76rem;
-      padding: 5px 12px;
-      border-radius: 20px;
-      border: 1px solid var(--border);
-      pointer-events: auto;
-      cursor: pointer;
+    .auth-input:focus { border-color: var(--primary); }
+    .auth-btn {
+      width: 100%; padding: 12px; background: #0284c7; border: none;
+      color: #fff; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.95rem;
     }
+    .auth-btn:hover { background: #0369a1; }
+    .auth-err { color: #ef4444; font-size: 0.82rem; margin-top: 10px; display: none; }
+    .auth-loading { color: var(--primary); font-size: 0.82rem; margin-top: 10px; display: none; }
 
-    .target-slot {
-      width: 86%;
-      height: 90px;
-      position: relative;
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
-      padding-bottom: 6px;
-    }
-
-    .target-slot::before, .target-slot::after {
-      content: ""; position: absolute; width: 22px; height: 22px; border-color: #22c55e; border-style: solid;
-    }
-    .target-slot::before { top: 0; left: 0; border-width: 3px 0 0 3px; }
-    .target-slot::after { top: 0; right: 0; border-width: 3px 3px 0 0; }
+    /* Header & Panel */
+    .header { width: 100%; max-width: 1250px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .header h2 { margin: 0; font-size: 1.35rem; color: var(--primary); }
+    .control-panel { width: 100%; max-width: 1250px; background: var(--panel-bg); padding: 12px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
     
-    .target-corner-bottom-left { position: absolute; bottom: 0; left: 0; width: 22px; height: 22px; border-color: #22c55e; border-style: solid; border-width: 0 0 3px 3px; }
-    .target-corner-bottom-right { position: absolute; bottom: 0; right: 0; width: 22px; height: 22px; border-color: #22c55e; border-style: solid; border-width: 0 3px 3px 0; }
+    .filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 6px; width: 100%; }
+    .filter-box { display: flex; flex-direction: column; gap: 3px; position: relative; }
+    .filter-label { font-size: 0.65rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
 
-    .format-label { color: #e2e8f0; font-size: 0.72rem; letter-spacing: 0.5px; opacity: 0.9; text-shadow: 0 1px 3px #000; }
+    /* Search & Wide Boxes */
+    .search-input { background: #090e1a; border: 1px solid var(--border); color: #fff; padding: 7px 10px; border-radius: 6px; font-size: 0.78rem; outline: none; width: 100%; }
+    .search-input:focus { border-color: var(--primary); }
+    .filter-box-wide { grid-column: span 2; min-width: 250px; }
 
-    .scanner-footer-cue {
-      background: #ffffff;
-      color: #1e293b;
-      font-size: 0.88rem;
-      font-weight: 600;
-      text-align: center;
-      padding: 12px 14px;
-      width: 100%;
-    }
-
-    .scanner-controls-bar {
-      margin-top: 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .btn-stop-camera {
-      background: #ffffff;
-      color: #0f172a;
-      border: 1px solid #cbd5e1;
-      padding: 10px 24px;
-      border-radius: 8px;
-      font-size: 0.92rem;
-      font-weight: 700;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .btn-torch-toggle {
-      background: #1e293b;
-      color: #38bdf8;
-      border: 1px solid var(--border);
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-size: 0.88rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    /* Result Card */
-    .card { width: 100%; max-width: 850px; border-radius: 12px; padding: 22px; text-align: center; min-height: 440px; display: flex; flex-direction: column; justify-content: center; }
-    .card.idle { background: var(--card-bg); border: 2px solid #475569; }
-    .card.found { background: #064e3b; border: 3px solid var(--accent); }
-    .card.not-found { background: #7f1d1d; border: 3px solid var(--danger); }
+    .dropdown-btn { background: #090e1a; color: var(--text); border: 1px solid var(--border); padding: 7px 10px; border-radius: 6px; font-size: 0.78rem; text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dropdown-btn:hover { border-color: var(--primary); }
+    .dropdown-btn::after { content: "▾"; font-size: 0.75rem; margin-left: 6px; color: var(--text-muted); flex-shrink: 0; }
     
-    .status-text { font-size: 1.1rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+    .dropdown-menu { display: none; position: absolute; top: calc(100% + 4px); left: 0; min-width: 220px; max-height: 310px; background: #0b1324; border: 1px solid var(--border); border-radius: 8px; z-index: 1000; flex-direction: column; padding: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.8); }
+    .dropdown-menu.show { display: flex; }
+    .dropdown-menu-wide { min-width: 440px; max-width: 520px; max-height: 380px; }
 
-    .product-content { display: flex; align-items: stretch; justify-content: flex-start; gap: 24px; margin-top: 10px; width: 100%; }
-    
-    .product-img-wrapper { 
-      width: 450px; height: 450px; min-width: 450px; 
-      border-radius: 12px; overflow: hidden; background: #fff; 
-      border: 3px solid var(--border); display: flex; align-items: center; justify-content: center;
-      position: relative; cursor: zoom-in;
+    /* Dropdown Toolbar */
+    .dropdown-toolbar { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    .select-all-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: var(--primary); cursor: pointer; padding: 2px 4px; }
+    .select-all-row:hover { background: #1e293b; border-radius: 4px; }
+    .select-all-label { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; font-weight: 600; }
+
+    .dropdown-search { background: #090e1a; border: 1px solid var(--border); color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 0.76rem; outline: none; }
+    .dropdown-search:focus { border-color: var(--primary); }
+    .dropdown-list { overflow-y: auto; display: flex; flex-direction: column; gap: 3px; max-height: 180px; }
+    .dropdown-menu-wide .dropdown-list { max-height: 260px; }
+
+    .dropdown-item { display: flex; align-items: flex-start; gap: 6px; font-size: 0.76rem; cursor: pointer; padding: 5px 6px; border-radius: 4px; word-break: break-all; }
+    .dropdown-item:hover { background: #1e293b; }
+    .dropdown-item input { margin-top: 2px; flex-shrink: 0; }
+
+    .weight-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .weight-row select, .weight-row input { background: #090e1a; border: 1px solid var(--border); color: var(--text); padding: 6px 8px; border-radius: 6px; font-size: 0.78rem; outline: none; }
+    .weight-row select { width: 120px; }
+    .weight-row input { width: 75px; }
+
+    /* Stats Bar and Bulk Selectors */
+    .stats-bar { width: 100%; max-width: 1250px; display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 10px; font-size: 0.78rem; color: var(--text-muted); flex-wrap: wrap; gap: 8px; }
+    .stats-bar b { color: var(--primary); }
+    .bulk-btn-group { display: flex; gap: 6px; align-items: center; }
+    .btn-bulk { background: #1e293b; border: 1px solid var(--border); color: #cbd5e1; padding: 4px 8px; border-radius: 4px; font-size: 0.72rem; cursor: pointer; font-weight: 600; }
+    .btn-bulk:hover { border-color: var(--primary); color: #fff; }
+    .btn-bulk-danger:hover { border-color: #ef4444; color: #ef4444; }
+
+    /* Responsive Main Card */
+    .main-card { width: 100%; max-width: 1250px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+    .card-top { display: flex; gap: 20px; align-items: flex-start; }
+
+    .image-viewer { 
+      width: 500px; 
+      height: 500px; 
+      min-width: 500px; 
+      background: #ffffff; 
+      border-radius: 10px; 
+      overflow: hidden; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      border: 1px solid var(--border); 
+      position: relative; 
+      cursor: zoom-in;
     }
-    .product-img { width: 100%; height: 100%; object-fit: contain; display: block; }
-    
+    .image-viewer img { width: 100%; height: 100%; object-fit: contain; }
     .zoom-hint {
-      position: absolute; bottom: 8px; right: 8px;
+      position: absolute; bottom: 10px; right: 10px;
       background: rgba(9, 14, 26, 0.75); color: #fff;
-      padding: 4px 8px; border-radius: 4px; font-size: 0.7rem;
+      padding: 4px 8px; border-radius: 4px; font-size: 0.68rem;
       pointer-events: none; backdrop-filter: blur(4px);
-      border: 1px solid var(--border);
+      border: 1px solid var(--border); opacity: 0.85;
     }
-
-    .img-loader { 
-      position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; 
-      gap: 10px; color: #0284c7; font-size: 0.85rem; font-weight: 700; background: #ffffff; 
-      width: 100%; height: 100%; z-index: 5; 
-    }
-    .spinner { 
-      width: 38px; height: 38px; border: 4px solid #e2e8f0; border-top-color: #0284c7; 
-      border-radius: 50%; animation: spin 0.8s linear infinite; 
-    }
+    .img-loader { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #0284c7; font-size: 0.85rem; font-weight: 700; background: #ffffff; width: 100%; height: 100%; z-index: 5; }
+    .spinner { width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #0284c7; border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .img-fallback { color: #64748b; font-size: 0.85rem; text-align: center; display: none; padding: 20px; z-index: 6; }
 
-    .img-fallback { 
-      color: #64748b; font-size: 0.85rem; text-align: center; display: none; padding: 20px; 
-      flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; background: #ffffff; 
+    .variant-details { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; width: 100%; }
+    .sku-badge { font-size: 1.35rem; font-weight: 800; color: var(--primary); font-family: monospace; }
+    .ag-tag { font-size: 0.75rem; color: var(--text-muted); word-break: break-all; margin-top: 2px; }
+    .pill-selected { background: #065f46; color: #34d399; border: 1px solid #059669; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; }
+
+    .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .metric-box { background: #090e1a; padding: 7px 9px; border-radius: 6px; border: 1px solid var(--border); }
+    .metric-lbl { font-size: 0.62rem; color: var(--text-muted); text-transform: uppercase; }
+    .metric-val { font-size: 0.9rem; font-weight: 700; color: #fff; margin-top: 2px; }
+
+    .section-title { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
+    .chip-container { display: flex; gap: 6px; flex-wrap: wrap; max-height: 85px; overflow-y: auto; padding: 2px; }
+    .chip { padding: 4px 8px; border-radius: 5px; background: #090e1a; border: 1px solid var(--border); font-size: 0.72rem; font-weight: 600; cursor: pointer; }
+    .chip:hover { border-color: var(--primary); }
+    .chip.active { background: #0284c7; border-color: var(--primary); color: #fff; }
+
+    .detailed-tray { background: #0b1324; border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+    .tray-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; text-align: left; }
+    .tray-table th { color: var(--text-muted); padding: 5px 6px; border-bottom: 1px solid var(--border); font-size: 0.68rem; }
+    .tray-table td { padding: 5px 6px; border-bottom: 1px solid #1a2538; }
+
+    /* Sticky Bottom Bar */
+    .actions-bar { 
+      position: sticky; bottom: 0; left: 0; width: 100%; max-width: 1250px; 
+      background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(8px); 
+      border: 1px solid var(--border); border-radius: 10px; 
+      padding: 10px 14px; display: flex; justify-content: space-between; 
+      align-items: center; margin-top: 10px; box-shadow: 0 -8px 25px rgba(0,0,0,0.5); z-index: 500; 
     }
-
-    .product-info-right { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: left; }
-    
-    .variant-header { font-size: 2rem; font-weight: 800; color: #fff; margin: 0 0 6px 0; line-height: 1.1; font-family: monospace; word-break: break-all; }
-    .lot-label { font-size: 1.15rem; color: #cbd5e1; margin-bottom: 10px; font-family: monospace; }
-    
-    .weight-highlight {
-      font-size: 2.3rem;
-      font-weight: 900;
-      color: var(--primary);
-      background: #0f172a;
-      display: inline-block;
-      padding: 6px 14px;
-      border-radius: 8px;
-      border: 1px solid var(--primary);
-      margin: 6px 0 12px 0;
-      line-height: 1.1;
-    }
-    .weight-unit { font-size: 1.1rem; font-weight: 700; color: var(--text-muted); margin-left: 4px; }
-    
-    .neutral-row { color: var(--text-muted); font-size: 1rem; font-weight: 400; margin-top: 4px; }
-    .neutral-row span { color: #cbd5e1; }
-
-    .raw-code { font-family: monospace; font-size: 0.82rem; color: var(--text-muted); word-break: break-all; margin-top: 14px; }
-
-    .history { width: 100%; max-width: 850px; margin-top: 20px; }
-    .history h4 { margin: 0 0 10px 0; font-size: 1rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-    
-    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
-    .action-btn { color: white; padding: 8px 15px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; cursor: pointer; user-select: none; border: none; white-space: nowrap; }
-    .csv-btn { background: #16a34a; }
-    .csv-btn:hover { background: #15803d; }
-    .pdf-btn { background: #2563eb; }
-    .pdf-btn:hover { background: #1d4ed8; }
-
-    .table-container { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; border: 1px solid var(--border); }
-    .history-table { width: 100%; border-collapse: collapse; background: var(--card-bg); font-size: 0.88rem; min-width: 580px; }
-    .history-table th { background: #0f172a; padding: 10px 12px; text-align: left; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
-    .history-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-    .history-table tr:last-child td { border-bottom: none; }
+    .btn-nav { background: #22324e; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.85rem; }
+    .btn-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-decision { display: flex; gap: 8px; }
+    .btn-action { padding: 10px 18px; border-radius: 6px; font-size: 0.85rem; font-weight: 700; cursor: pointer; border: none; }
+    .btn-confirm { background: #16a34a; color: white; }
+    .btn-confirmed { background: #dc2626; color: white; }
+    .export-btn { background: #2563eb; color: #fff; border: none; padding: 7px 12px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.78rem; }
 
     /* Lightbox Modal */
     .lightbox-modal {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(4, 7, 15, 0.95); backdrop-filter: blur(8px);
-      z-index: 10000; flex-direction: column; align-items: center; justify-content: center;
-      padding: 14px; user-select: none;
+      background: rgba(4, 7, 15, 0.94); backdrop-filter: blur(12px);
+      z-index: 10000; flex-direction: column; align-items: center; justify-content: center; padding: 16px; user-select: none;
     }
     .lightbox-modal.active { display: flex; }
-    .lightbox-header { width: 100%; max-width: 700px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .lightbox-badge { font-size: 1.15rem; font-weight: 800; color: var(--primary); font-family: monospace; }
-    .lightbox-close-btn {
-      background: #1e293b; color: #fff; border: 1px solid var(--border);
-      width: 36px; height: 36px; border-radius: 50%; font-size: 1.1rem;
-      cursor: pointer; display: flex; align-items: center; justify-content: center;
-    }
-    .lightbox-body {
-      width: 100%; max-width: 700px; height: calc(100vh - 120px); max-height: 650px;
-      background: #fff; border-radius: 12px; overflow: hidden; display: flex;
-      align-items: center; justify-content: center; position: relative; border: 2px solid var(--border);
-    }
+    .lightbox-header { width: 100%; max-width: 900px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
+    .lightbox-meta { display: flex; align-items: center; gap: 8px; color: #fff; flex-wrap: wrap; }
+    .lightbox-badge { font-size: 1.3rem; font-weight: 800; color: var(--primary); font-family: monospace; }
+    .lightbox-tag { font-size: 0.8rem; color: var(--text-muted); background: #131c2e; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); }
+    .lightbox-tag-wt { font-size: 0.82rem; font-weight: 700; color: #38bdf8; background: #0c213d; border-color: #0284c7; }
+    .lightbox-close-btn { background: #1e293b; color: #fff; border: 1px solid var(--border); width: 38px; height: 38px; border-radius: 50%; font-size: 1.2rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .lightbox-close-btn:hover { background: #dc2626; border-color: #dc2626; }
+    .lightbox-body { width: 100%; max-width: 900px; height: calc(100vh - 160px); max-height: 800px; background: #ffffff; border-radius: 14px; overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid var(--border); }
     .lightbox-body img { width: 100%; height: 100%; object-fit: contain; }
+    .lightbox-actions-bar { margin-top: 12px; width: 100%; max-width: 900px; display: flex; justify-content: space-between; align-items: center; background: rgba(15, 23, 42, 0.95); border: 1px solid var(--border); border-radius: 10px; padding: 10px 16px; backdrop-filter: blur(8px); }
 
-    /* Modal for PDF 2x2 Field Selection */
-    .modal-overlay {
+    /* Download/Export Choice Modal */
+    #exportModal {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(9, 14, 26, 0.85); backdrop-filter: blur(4px); z-index: 10000;
-      align-items: center; justify-content: center; padding: 14px;
+      background: rgba(4, 7, 15, 0.85); backdrop-filter: blur(8px);
+      z-index: 20000; align-items: center; justify-content: center;
     }
-    .modal-overlay.active { display: flex; }
-    .modal-box {
+    #exportModal.active { display: flex; }
+    .export-card {
       background: #131c2e; border: 1px solid var(--border); border-radius: 12px;
-      padding: 22px; max-width: 440px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+      padding: 22px; width: 90%; max-width: 480px; box-shadow: 0 20px 40px rgba(0,0,0,0.8);
     }
-    .modal-box h3 { margin: 0 0 6px 0; color: var(--primary); font-size: 1.2rem; }
-    .modal-box p { margin: 0 0 14px 0; color: var(--text-muted); font-size: 0.82rem; }
-    .field-options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px; }
-    .field-option-label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #fff; cursor: pointer; }
-    .field-option-label input { accent-color: var(--primary); cursor: pointer; }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
-    .btn-cancel { background: #334155; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
-    .btn-generate { background: #2563eb; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.85rem; }
-
-    /* Mobile Responsive Rules */
-    @media (max-width: 768px) {
-      body { padding: 10px 10px 85px 10px; }
-      .header h2 { font-size: 1.35rem; }
-      .card { padding: 16px; min-height: auto; }
-      .product-content { flex-direction: column; align-items: center; gap: 14px; margin-top: 6px; }
-      
-      .product-img-wrapper {
-        width: 100%; max-width: 340px; height: auto;
-        aspect-ratio: 1 / 1; min-width: 0; border-radius: 10px;
-      }
-      
-      .product-info-right { text-align: center; align-items: center; width: 100%; }
-      .variant-header { font-size: 1.6rem; }
-      .lot-label { font-size: 1.05rem; margin-bottom: 6px; }
-      .weight-highlight { font-size: 1.95rem; padding: 4px 12px; margin: 4px 0 10px 0; }
-      .weight-unit { font-size: 0.95rem; }
-      .neutral-row { font-size: 0.92rem; }
-      
-      .status-bar { font-size: 0.8rem; padding: 8px 12px; }
-      #scanInput { font-size: 1rem; padding: 10px; }
-      .btn-camera-trigger { font-size: 0.85rem; padding: 0 12px; }
-
-      .history h4 { flex-direction: column; align-items: stretch; gap: 10px; }
-      .btn-group { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
-      .action-btn { width: 100%; text-align: center; padding: 10px 6px; font-size: 0.82rem; }
-
-      .lightbox-body { height: calc(100vh - 160px); }
-      .field-options-grid { grid-template-columns: 1fr; gap: 6px; }
-
-      /* Show Floating Mobile Bottom Action Bar */
-      .mobile-floating-bar { display: flex; }
+    .export-card h3 { margin: 0 0 6px 0; color: var(--primary); font-size: 1.15rem; }
+    .export-card p { font-size: 0.8rem; color: var(--text-muted); margin: 0 0 16px 0; }
+    .export-options-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+    .export-type-btn {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #090e1a; border: 1px solid var(--border); color: #fff;
+      padding: 12px 14px; border-radius: 8px; cursor: pointer; text-align: left;
     }
+    .export-type-btn:hover { border-color: var(--primary); }
+    .pdf-field-selector {
+      background: #090e1a; border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;
+    }
+    .pdf-field-title { font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+    .pdf-fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .pdf-chk-label { font-size: 0.76rem; color: #cbd5e1; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .export-modal-footer { display: flex; justify-content: flex-end; gap: 10px; }
+    .btn-secondary { background: #334155; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; }
+    .btn-primary-action { background: #0284c7; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 700; }
 
-    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    @media (max-width: 980px) {
+      body { padding: 10px 10px 80px 10px; }
+      .card-top { flex-direction: column; align-items: center; gap: 16px; }
+      .image-viewer { width: 100%; max-width: 440px; height: auto; aspect-ratio: 1 / 1; min-width: 0; }
+      .metric-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+      .filter-grid { grid-template-columns: repeat(2, 1fr); }
+      .filter-box-wide { grid-column: span 2; min-width: 100%; }
+      .dropdown-menu-wide { min-width: 90vw; max-width: 90vw; }
+      .chip-container { max-height: 120px; }
+      .chip { padding: 6px 10px; font-size: 0.78rem; }
+      .btn-nav, .btn-action { padding: 10px 14px; font-size: 0.82rem; }
+      .lightbox-body { height: calc(100vh - 200px); }
+    }
   </style>
 </head>
 <body>
 
-  <div class="header">
-    <h2>Inwarding — PC Inspection Station</h2>
-    <p>Direct Scan Match • Mobile Camera • 2x2 PDF Export</p>
-  </div>
-
-  <div class="file-box">
-    <div class="source-status" id="sourceStatus">⏳ Connecting to repository dataset (<b>Product_receipt.xlsx</b>)...</div>
-    <div>
-      <label for="excelInput" class="manual-upload-label">Load local file instead</label>
-      <input type="file" id="excelInput" accept=".xlsx, .xls">
+  <!-- Password Authentication -->
+  <div id="authOverlay">
+    <div class="auth-card">
+      <h3>South1 Secured Access</h3>
+      <p>Enter the store PIN to decrypt weekly stock data.</p>
+      <input type="password" id="passInput" class="auth-input" placeholder="Password" onkeydown="if(event.key==='Enter') decryptAndLoad()">
+      <button class="auth-btn" id="unlockBtn" onclick="decryptAndLoad()">Unlock Catalog</button>
+      <div id="authLoading" class="auth-loading">⏳ Fetching encrypted dataset...</div>
+      <div id="authErr" class="auth-err">Incorrect PIN. Access Denied.</div>
     </div>
   </div>
 
-  <div class="status-bar">
-    <div><span class="pulse-dot"></span><b>Scanner Gun / Camera:</b> Ready</div>
-    <div>Database: <b id="dbCount">0</b> items | Checked: <b id="scanCount">0</b></div>
+  <div class="header">
+    <h2>South1 Catalogue</h2>
+    <button class="export-btn" onclick="openExportModal()">📥 Download Selected (<span id="exportCount">0</span>)</button>
   </div>
 
-  <div class="scan-controls-container">
-    <input type="text" id="scanInput" placeholder="Scan tag or type here..." autocomplete="off" />
-    <button class="btn-camera-trigger" id="openCameraBtn" onclick="startMobileCamera()">📷 Camera</button>
-  </div>
+  <div class="control-panel">
+    <div class="filter-grid">
+      <!-- Universal Live Search: Pinpoint Weights, SKUs, Stores, Categories, Clusters, and AGs -->
+      <div class="filter-box">
+        <span class="filter-label">Search (SKU, Exact WT, AG, Store...)</span>
+        <input type="text" class="search-input" id="skuSearchInput" placeholder="e.g. 4.250, Ring, or 50D2..." oninput="handleUniversalSearch()">
+      </div>
 
-  <div id="resultCard" class="card idle">
-    <div id="statusText" class="status-text" style="color: #94a3b8;">Ready for Tag</div>
-
-    <div id="productContent" class="product-content" style="display: none;">
-      <!-- Product Image with Loader, Tap to Zoom, and Fallback -->
-      <div class="product-img-wrapper" onclick="openLightbox()" title="Tap to zoom">
-        <div class="img-loader" id="imgLoader"><div class="spinner"></div><span>Loading image...</span></div>
-        <img id="productImg" class="product-img" src="" alt="Product Large Image" onload="handleImageSuccess()" onerror="handleImageError()">
-        <div id="imgFallback" class="img-fallback">
-          <div style="font-size: 2.2rem; margin-bottom: 6px;">🖼️</div>
-          <div style="font-weight: 700; color: #334155;">No Catalog Image Found</div>
-          <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px;" id="fallbackDesignTag">Design: -</div>
+      <div class="filter-box" id="fb-store">
+        <span class="filter-label">Store Code</span>
+        <button class="dropdown-btn" onclick="toggleDropdown('store')">All Stores</button>
+        <div class="dropdown-menu" id="menu-store">
+          <div class="dropdown-toolbar">
+            <div class="select-all-row" onclick="toggleSelectAllDropdown('store')">
+              <span class="select-all-label">
+                <input type="checkbox" id="chk-all-store" onclick="event.stopPropagation(); toggleSelectAllDropdown('store')">
+                <span>Select All</span>
+              </span>
+              <small id="lbl-all-store" style="color:var(--text-muted);">0 / 0</small>
+            </div>
+            <input type="text" class="dropdown-search" placeholder="Search..." oninput="filterChecklist('store', this.value)">
+          </div>
+          <div class="dropdown-list" id="list-store"></div>
         </div>
+      </div>
+
+      <div class="filter-box" id="fb-cat">
+        <span class="filter-label">Product Cat</span>
+        <button class="dropdown-btn" onclick="toggleDropdown('cat')">All Categories</button>
+        <div class="dropdown-menu" id="menu-cat">
+          <div class="dropdown-toolbar">
+            <div class="select-all-row" onclick="toggleSelectAllDropdown('cat')">
+              <span class="select-all-label">
+                <input type="checkbox" id="chk-all-cat" onclick="event.stopPropagation(); toggleSelectAllDropdown('cat')">
+                <span>Select All</span>
+              </span>
+              <small id="lbl-all-cat" style="color:var(--text-muted);">0 / 0</small>
+            </div>
+            <input type="text" class="dropdown-search" placeholder="Search..." oninput="filterChecklist('cat', this.value)">
+          </div>
+          <div class="dropdown-list" id="list-cat"></div>
+        </div>
+      </div>
+
+      <div class="filter-box" id="fb-cluster">
+        <span class="filter-label">Cluster</span>
+        <button class="dropdown-btn" onclick="toggleDropdown('cluster')">All Clusters</button>
+        <div class="dropdown-menu" id="menu-cluster">
+          <div class="dropdown-toolbar">
+            <div class="select-all-row" onclick="toggleSelectAllDropdown('cluster')">
+              <span class="select-all-label">
+                <input type="checkbox" id="chk-all-cluster" onclick="event.stopPropagation(); toggleSelectAllDropdown('cluster')">
+                <span>Select All</span>
+              </span>
+              <small id="lbl-all-cluster" style="color:var(--text-muted);">0 / 0</small>
+            </div>
+            <input type="text" class="dropdown-search" placeholder="Search..." oninput="filterChecklist('cluster', this.value)">
+          </div>
+          <div class="dropdown-list" id="list-cluster"></div>
+        </div>
+      </div>
+      
+      <div class="filter-box filter-box-wide" id="fb-ag">
+        <span class="filter-label">AG Group</span>
+        <button class="dropdown-btn" onclick="toggleDropdown('ag')">All AGs</button>
+        <div class="dropdown-menu dropdown-menu-wide" id="menu-ag">
+          <div class="dropdown-toolbar">
+            <div class="select-all-row" onclick="toggleSelectAllDropdown('ag')">
+              <span class="select-all-label">
+                <input type="checkbox" id="chk-all-ag" onclick="event.stopPropagation(); toggleSelectAllDropdown('ag')">
+                <span>Select All</span>
+              </span>
+              <small id="lbl-all-ag" style="color:var(--text-muted);">0 / 0</small>
+            </div>
+            <input type="text" class="dropdown-search" placeholder="Search AG..." oninput="filterChecklist('ag', this.value)">
+          </div>
+          <div class="dropdown-list" id="list-ag"></div>
+        </div>
+      </div>
+      
+      <div class="filter-box" id="fb-size">
+        <span class="filter-label">Size</span>
+        <button class="dropdown-btn" onclick="toggleDropdown('size')">All Sizes</button>
+        <div class="dropdown-menu" id="menu-size">
+          <div class="dropdown-toolbar">
+            <div class="select-all-row" onclick="toggleSelectAllDropdown('size')">
+              <span class="select-all-label">
+                <input type="checkbox" id="chk-all-size" onclick="event.stopPropagation(); toggleSelectAllDropdown('size')">
+                <span>Select All</span>
+              </span>
+              <small id="lbl-all-size" style="color:var(--text-muted);">0 / 0</small>
+            </div>
+            <input type="text" class="dropdown-search" placeholder="Search size..." oninput="filterChecklist('size', this.value)">
+          </div>
+          <div class="dropdown-list" id="list-size"></div>
+        </div>
+      </div>
+
+      <div class="filter-box" id="fb-karat">
+        <span class="filter-label">Karat</span>
+        <button class="dropdown-btn" onclick="toggleDropdown('karat')">All Karats</button>
+        <div class="dropdown-menu" id="menu-karat">
+          <div class="dropdown-toolbar">
+            <div class="select-all-row" onclick="toggleSelectAllDropdown('karat')">
+              <span class="select-all-label">
+                <input type="checkbox" id="chk-all-karat" onclick="event.stopPropagation(); toggleSelectAllDropdown('karat')">
+                <span>Select All</span>
+              </span>
+              <small id="lbl-all-karat" style="color:var(--text-muted);">0 / 0</small>
+            </div>
+            <input type="text" class="dropdown-search" placeholder="Search karat..." oninput="filterChecklist('karat', this.value)">
+          </div>
+          <div class="dropdown-list" id="list-karat"></div>
+        </div>
+      </div>
+
+      <div class="filter-box" id="fb-prolif">
+        <span class="filter-label">Prolif</span>
+        <button class="dropdown-btn" onclick="toggleDropdown('prolif')">All Prolifs</button>
+        <div class="dropdown-menu" id="menu-prolif">
+          <div class="dropdown-toolbar">
+            <div class="select-all-row" onclick="toggleSelectAllDropdown('prolif')">
+              <span class="select-all-label">
+                <input type="checkbox" id="chk-all-prolif" onclick="event.stopPropagation(); toggleSelectAllDropdown('prolif')">
+                <span>Select All</span>
+              </span>
+              <small id="lbl-all-prolif" style="color:var(--text-muted);">0 / 0</small>
+            </div>
+            <input type="text" class="dropdown-search" placeholder="Search prolif..." oninput="filterChecklist('prolif', this.value)">
+          </div>
+          <div class="dropdown-list" id="list-prolif"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--border);">
+      <span class="filter-label">Weight (WT):</span>
+      <div class="weight-row">
+        <select id="wtOp" onchange="handleWtOpChange()">
+          <option value="any">Any Weight</option>
+          <option value="eq">Equals (=)</option>
+          <option value="gt">Greater Than (&gt;)</option>
+          <option value="gte">Greater Than or Equal (&gt;=)</option>
+          <option value="lt">Less Than (&lt;)</option>
+          <option value="lte">Less Than or Equal (&lt;=)</option>
+          <option value="between">Between</option>
+        </select>
+        <input type="number" id="wtVal1" step="0.001" placeholder="Val" style="display:none;" oninput="applyFilters()">
+        <span id="wtBetweenSpan" style="display:none; font-size:0.75rem; color:var(--text-muted);">&amp;</span>
+        <input type="number" id="wtVal2" step="0.001" placeholder="Max" style="display:none;" oninput="applyFilters()">
+      </div>
+      <button style="margin-left: auto; background: #334155; border: none; color: #fff; padding: 5px 10px; border-radius: 4px; font-size: 0.72rem; cursor: pointer;" onclick="resetAllFilters()">Reset Filters</button>
+    </div>
+  </div>
+
+  <!-- Bulk Selection Toolbar and Stats -->
+  <div class="stats-bar">
+    <div>Filtered Unique Variants: <b id="statVariantCount">0</b> <span id="statTotalUnits" style="color:var(--text-muted); font-size:0.78rem;"></span></div>
+    <div>Viewing: <b id="statCurIdx">0</b> of <span id="statMaxIdx">0</span></div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div>Selected: <b id="statSelectedCount">0</b></div>
+      <div class="bulk-btn-group">
+        <button class="btn-bulk" onclick="selectAllFilteredVariants()" title="Select and confirm all currently filtered variants">Select Filtered</button>
+        <button class="btn-bulk btn-bulk-danger" onclick="unselectAllVariants()" title="Clear all confirmed selections">Clear All</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-card">
+    <div class="card-top">
+      <div class="image-viewer" onclick="openLightbox()" title="Click to enlarge image">
+        <div class="img-loader" id="imgLoader"><div class="spinner"></div><span>Loading image...</span></div>
+        <img id="itemImg" src="" alt="Variant Preview" onload="handleImageSuccess()" onerror="handleImageError()">
+        <div id="imgFallback" class="img-fallback">Image not found on catalog server</div>
         <div class="zoom-hint">🔍 Tap to Zoom</div>
       </div>
-      
-      <!-- Details on the Right (Stacks Below Image on Mobile) -->
-      <div class="product-info-right">
-        <div id="dispVariant" class="variant-header">---</div>
-        <div class="lot-label">Lot No: <span id="dispLot">---</span></div>
-        <div>
-          <div class="weight-highlight"><span id="dispWeight">0.000</span><span class="weight-unit">g</span></div>
+
+      <div class="variant-details">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <div><div class="sku-badge" id="dispVariant">---</div><div class="ag-tag" id="dispAG">---</div></div>
+          <div><span id="dispSelectedBadge" class="pill-selected" style="display:none;">CONFIRMED</span></div>
         </div>
-        <div class="neutral-row">Category: <span id="dispCat">-</span></div>
-        <div class="neutral-row">Group: <span id="dispGroup">-</span></div>
-      </div>
-    </div>
 
-    <div id="idleDetails" class="details" style="text-align: center; color: #94a3b8; margin-top: 20px;">Pull trigger on scanner gun or tap Camera to scan jewellery tag</div>
-    <div id="rawDisplay" class="raw-code"></div>
-  </div>
-
-  <div class="history">
-    <h4>
-      <span>Verified Items Log</span>
-      <div class="btn-group">
-        <button class="action-btn csv-btn" onclick="exportExcel()">📥 Download Excel</button>
-        <button class="action-btn pdf-btn" onclick="openPDFModal()">📄 Download 2x2 PDF</button>
-      </div>
-    </h4>
-    <div class="table-container">
-      <table class="history-table">
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Variant</th>
-            <th>Lot No</th>
-            <th>Weight</th>
-            <th>Category</th>
-            <th>Group</th>
-            <th>STN No</th>
-          </tr>
-        </thead>
-        <tbody id="historyBody">
-          <tr>
-            <td colspan="7" style="text-align:center; color:#64748b; padding:18px;">No items scanned yet</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Mobile Floating Quick-Scan Bar -->
-  <div class="mobile-floating-bar" id="mobileFloatingBar">
-    <button class="btn-floating-camera" onclick="startMobileCamera()">📷 Scan Next Tag</button>
-  </div>
-
-  <!-- Mobile Camera Scanner Viewport -->
-  <div class="camera-modal-overlay" id="cameraModal">
-    <div class="scanner-viewport-box">
-      <div id="cameraReaderView" onclick="triggerCameraRefocus()"></div>
-      
-      <div class="scanner-reticle-overlay">
-        <div class="reticle-tip" onclick="triggerCameraRefocus()">Blurry? Tap the video to refocus</div>
-        
-        <div class="target-slot">
-          <div class="target-corner-bottom-left"></div>
-          <div class="target-corner-bottom-right"></div>
-          <span class="format-label">QR Code • PDF417</span>
+        <div class="metric-grid">
+          <div class="metric-box"><div class="metric-lbl">Product Cat</div><div class="metric-val" id="dispCat">-</div></div>
+          <div class="metric-box"><div class="metric-lbl">Cluster</div><div class="metric-val" id="dispCluster">-</div></div>
+          <div class="metric-box"><div class="metric-lbl">Karat / Prolif</div><div class="metric-val" id="dispKaratProlif">-</div></div>
+          <div class="metric-box"><div class="metric-lbl">Total Stock</div><div class="metric-val" id="dispTotalQty">0 pcs</div></div>
         </div>
-        
-        <div style="height: 10px;"></div>
-      </div>
 
-      <div class="scanner-footer-cue">
-        Point camera at QR or PDF417 barcode
-      </div>
-    </div>
+        <div style="background: #090e1a; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border);">
+          <div class="section-title"><span>Available Stores (<span id="dispStoreCount">0</span>)</span><span style="color:var(--primary); font-size:0.65rem;">Tap chip to filter</span></div>
+          <div class="chip-container" id="dispStoreChips"></div>
+        </div>
 
-    <div class="scanner-controls-bar">
-      <button class="btn-torch-toggle" id="torchToggleBtn" onclick="toggleTorch()">🔦 Torch</button>
-      <button class="btn-stop-camera" onclick="stopMobileCamera()">🚫 Stop Scanning</button>
+        <div style="display:flex; gap:8px;">
+          <div style="flex:1; background:#090e1a; padding:7px 9px; border-radius:6px; border:1px solid var(--border);"><div class="section-title">Available Sizes</div><div id="dispSizesText" style="font-weight:700; color:#fff; font-size:0.8rem;">-</div></div>
+          <div style="flex:1; background:#090e1a; padding:7px 9px; border-radius:6px; border:1px solid var(--border);"><div class="section-title">Weight Range (WT)</div><div id="dispWtRangeText" style="font-weight:700; color:#fff; font-size:0.8rem;">-</div></div>
+        </div>
+
+        <div class="detailed-tray">
+          <div style="font-size:0.75rem; font-weight:700; color:var(--primary); margin-bottom:6px;" id="trayHeader">Available Lots & Weights</div>
+          <div style="max-height: 155px; overflow-y: auto;">
+            <table class="tray-table">
+              <thead><tr><th>Store</th><th>Lot No</th><th>Qty</th><th>WT (g)</th><th>Size</th><th>Value (₹)</th></tr></thead>
+              <tbody id="trayTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Floating Lightbox Modal -->
-  <div class="lightbox-modal" id="lightboxModal" onclick="if(event.target.id === 'lightboxModal') closeLightbox()">
+  <!-- Sticky Bottom Bar -->
+  <div class="actions-bar">
+    <button class="btn-nav" id="prevBtn" onclick="navigateVariant(-1)">← Prev</button>
+    <div class="btn-decision">
+      <button class="btn-action" style="background:#334155; color:#fff;" onclick="navigateVariant(1)">Skip</button>
+      <button class="btn-action btn-confirm" id="confirmBtn" onclick="toggleConfirmCurrent()">✔ Confirm</button>
+    </div>
+    <button class="btn-nav" id="nextBtn" onclick="navigateVariant(1)">Next →</button>
+  </div>
+
+  <!-- Floating Lightbox Overlay -->
+  <div class="lightbox-modal" id="lightboxModal" onclick="handleLightboxBackdropClick(event)">
     <div class="lightbox-header">
-      <span class="lightbox-badge" id="modalDesignBadge">---</span>
-      <button class="lightbox-close-btn" onclick="closeLightbox()">✕</button>
+      <div class="lightbox-meta">
+        <span class="lightbox-badge" id="modalDesignBadge">---</span>
+        <span class="lightbox-tag" id="modalMetaTag">-</span>
+        <span class="lightbox-tag lightbox-tag-wt" id="modalWtTag">WT: -</span>
+        <span class="lightbox-tag" id="modalIdxTag">0 of 0</span>
+      </div>
+      <button class="lightbox-close-btn" onclick="closeLightbox()" title="Close (Esc)">✕</button>
     </div>
-    <div class="lightbox-body">
-      <img id="modalImg" src="" alt="Enlarged View">
+
+    <div class="lightbox-body" id="lightboxBody">
+      <div class="img-loader" id="modalImgLoader"><div class="spinner"></div><span>Loading full-size preview...</span></div>
+      <img id="modalImg" src="" alt="Enlarged Variant Preview" onload="handleModalImgSuccess()" onerror="handleModalImgError()">
+      <div id="modalFallback" class="img-fallback"></div>
+    </div>
+
+    <div class="lightbox-actions-bar">
+      <button class="btn-nav" id="modalPrevBtn" onclick="navigateVariant(-1)">← Prev</button>
+      <div class="btn-decision">
+        <button class="btn-action" style="background:#334155; color:#fff;" onclick="navigateVariant(1)">Skip</button>
+        <button class="btn-action btn-confirm" id="modalConfirmBtn" onclick="toggleConfirmCurrent()">✔ Confirm Selection</button>
+      </div>
+      <button class="btn-nav" id="modalNextBtn" onclick="navigateVariant(1)">Next →</button>
     </div>
   </div>
 
-  <!-- PDF 2x2 Layout Options Modal -->
-  <div class="modal-overlay" id="pdfModal">
-    <div class="modal-box">
-      <h3>Catalogue PDF Settings</h3>
-      <p>Configure fields to display below each product image in the 2x2 layout:</p>
+  <!-- Download/Export Choice Modal -->
+  <div id="exportModal">
+    <div class="export-card">
+      <h3>Select Export Format</h3>
+      <p>Choose whether to generate an Excel worksheet or a structured visual PDF catalog.</p>
       
-      <div class="field-options-grid">
-        <label class="field-option-label">
-          <input type="checkbox" id="chkPdfVariant" checked>
-          <span>Variant Code</span>
-        </label>
-        <label class="field-option-label">
-          <input type="checkbox" id="chkPdfLot" checked>
-          <span>Lot Number</span>
-        </label>
-        <label class="field-option-label">
-          <input type="checkbox" id="chkPdfWeight" checked>
-          <span>Weight (g)</span>
-        </label>
-        <label class="field-option-label">
-          <input type="checkbox" id="chkPdfCat" checked>
-          <span>Category</span>
-        </label>
-        <label class="field-option-label">
-          <input type="checkbox" id="chkPdfGroup" checked>
-          <span>Group</span>
-        </label>
-        <label class="field-option-label">
-          <input type="checkbox" id="chkPdfStn" checked>
-          <span>STN Number</span>
-        </label>
-        <label class="field-option-label">
-          <input type="checkbox" id="chkPdfDocket">
-          <span>Docket No</span>
-        </label>
+      <div class="export-options-grid">
+        <div class="export-type-btn" onclick="exportSelectedExcel()">
+          <div>
+            <b style="color:var(--primary);">📊 Download Excel (.xlsx)</b>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Original detailed data spreadsheet</div>
+          </div>
+          <span>➔</span>
+        </div>
       </div>
 
-      <div class="modal-actions">
-        <button class="btn-cancel" onclick="closePDFModal()">Cancel</button>
-        <button class="btn-generate" id="generatePdfBtn" onclick="generate2x2PDF()">Generate PDF</button>
+      <div class="pdf-field-selector">
+        <div class="pdf-field-title">Visual PDF Card Attributes to Include:</div>
+        <div class="pdf-fields-grid">
+          <label class="pdf-chk-label"><input type="checkbox" id="pdfChkVariant"> SKU / Variant</label>
+          <!-- Only Weight Range is checked by default -->
+          <label class="pdf-chk-label"><input type="checkbox" id="pdfChkWt" checked> Weight Range (WT)</label>
+          <label class="pdf-chk-label"><input type="checkbox" id="pdfChkCat"> Product Category</label>
+          <label class="pdf-chk-label"><input type="checkbox" id="pdfChkAg"> AG Group</label>
+          <label class="pdf-chk-label"><input type="checkbox" id="pdfChkCluster"> Cluster</label>
+          <label class="pdf-chk-label"><input type="checkbox" id="pdfChkSize"> Size(s)</label>
+          <label class="pdf-chk-label"><input type="checkbox" id="pdfChkKarat"> Karat &amp; Prolif</label>
+        </div>
+      </div>
+
+      <div class="export-modal-footer">
+        <button class="btn-secondary" onclick="closeExportModal()">Cancel</button>
+        <button class="btn-primary-action" id="pdfExportActionBtn" onclick="exportSelectedPDF()">📄 Generate Visual PDF</button>
       </div>
     </div>
   </div>
 
   <script>
-    let uploadedWorkbook = null;
-    let pendingSheetName = 'Pending';
-    let scannedRowIndices = new Set();
-    let scannedColIndex = -1;
-    let originalFileName = 'Product_receipt.xlsx';
+    // Strict Domain Security Guardrail
+    (function() {
+      const allowedDomain = "sravanarun.github.io";
+      const isLocalHost = window.location.hostname === "localhost" || 
+                          window.location.hostname === "127.0.0.1" || 
+                          window.location.protocol === "file:";
 
-    let DB = {};
-    let LotDB = {};
-    let scannedItems = [];
-    let currentMatchedItem = null;
-    const scanInput = document.getElementById('scanInput');
-    let scanTimeout;
+      if (window.location.hostname !== allowedDomain && !isLocalHost) {
+        document.body.innerHTML = `
+          <div style="background:#090e1a; color:#ef4444; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:sans-serif; text-align:center; padding:20px;">
+            <h2 style="margin-bottom:8px; font-size:1.6rem;">Access Denied</h2>
+            <p style="color:#94a3b8; font-size:0.95rem;">Unauthorized mirror or environment detected. Execution halted.</p>
+          </div>`;
+        throw new Error("Execution prohibited on unauthorized host.");
+      }
+    })();
 
-    // Detect if user is on mobile/touch device
-    const isMobileDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || window.innerWidth <= 768;
+    let rawData = [];
+    let filteredGroups = [];
+    let selectedVariantsMap = new Map();
+    let currentIdx = 0;
+    let activeStoreFilter = null;
+    let encryptedData = "";
+    let dataFetchPromise = null;
+    let isLightboxOpen = false;
 
-    // Camera State
-    let html5QrScanner = null;
-    let cameraTrack = null;
-    let isTorchOn = false;
+    const filterFields = {
+      store: { col: 'Storecode', selected: new Set() },
+      cat: { col: 'Product category', selected: new Set() },
+      cluster: { col: 'CLUSTER', selected: new Set() },
+      ag: { col: 'AG', selected: new Set() },
+      size: { col: 'Size', selected: new Set() },
+      karat: { col: 'Karat', selected: new Set() },
+      prolif: { col: 'Prolif', selected: new Set() }
+    };
 
-    // Only maintain aggressive auto-focus on PC (prevents virtual keyboard popup on mobile)
-    if (!isMobileDevice) {
-      scanInput.focus();
-      scanInput.addEventListener('blur', () => {
-        setTimeout(() => {
-          const isInteracting = document.activeElement.id === 'excelInput' || 
-                                document.getElementById('pdfModal').classList.contains('active') ||
-                                document.getElementById('cameraModal').classList.contains('active') ||
-                                document.getElementById('lightboxModal').classList.contains('active');
-          if (!isInteracting) {
-            scanInput.focus();
-          }
-        }, 150);
-      });
+    window.addEventListener('click', (e) => {
+      if (!e.target.closest('.filter-box')) document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
+    });
+
+    function toggleDropdown(key) {
+      const menu = document.getElementById(`menu-${key}`);
+      const isShown = menu.classList.contains('show');
+      document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
+      if (!isShown) menu.classList.add('show');
     }
 
     window.addEventListener('DOMContentLoaded', () => {
-      fetchAutoFile('Product_receipt.xlsx');
+      dataFetchPromise = fetch(`data.enc?t=${Date.now()}`)
+        .then(res => {
+          if (!res.ok) throw new Error("Could not find data.enc");
+          return res.text();
+        })
+        .then(text => {
+          encryptedData = text;
+          return text;
+        })
+        .catch(err => {
+          console.error(err);
+          return null;
+        });
     });
 
-    async function fetchAutoFile(fileName) {
-      const statusEl = document.getElementById('sourceStatus');
+    async function decryptAndLoad() {
+      const pin = document.getElementById('passInput').value.trim();
+      const errBox = document.getElementById('authErr');
+      const loadBox = document.getElementById('authLoading');
+      const btn = document.getElementById('unlockBtn');
+
+      errBox.style.display = 'none';
+
+      if (!pin) {
+        errBox.innerText = "Please enter your password / PIN.";
+        errBox.style.display = 'block';
+        return;
+      }
+
+      if (!encryptedData) {
+        loadBox.style.display = 'block';
+        btn.disabled = true;
+        try {
+          encryptedData = await dataFetchPromise;
+        } catch (e) {
+          console.error(e);
+        } finally {
+          loadBox.style.display = 'none';
+          btn.disabled = false;
+        }
+      }
+
+      if (!encryptedData) {
+        errBox.innerText = "Failed to load data.enc file. Verify repository files.";
+        errBox.style.display = 'block';
+        return;
+      }
+
       try {
-        const response = await fetch(`${fileName}?t=${Date.now()}`);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const arrayBuffer = await response.arrayBuffer();
-        parseWorkbookArray(new Uint8Array(arrayBuffer), fileName);
-        statusEl.innerHTML = `🟢 Loaded repository file: <b>${fileName}</b> (${Object.keys(DB).length} products)`;
-      } catch (err) {
-        console.warn('Auto-fetch:', err);
-        statusEl.innerHTML = `ℹ️ Place <b>${fileName}</b> in your GitHub repo, or load manually.`;
+        const bytes = CryptoJS.AES.decrypt(encryptedData, pin);
+        const base64Compressed = bytes.toString(CryptoJS.enc.Utf8);
+        if (!base64Compressed) throw new Error("Incorrect Password");
+
+        const binaryStr = atob(base64Compressed);
+        const len = binaryStr.length;
+        const bytesArr = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytesArr[i] = binaryStr.charCodeAt(i);
+        }
+        const decompressedJsonStr = pako.ungzip(bytesArr, { to: 'string' });
+
+        const parsedRows = JSON.parse(decompressedJsonStr);
+        rawData = [];
+
+        parsedRows.forEach(r => {
+          const getVal = (colNames) => {
+            for (const name of colNames) {
+              for (const key of Object.keys(r)) {
+                if (key.trim().toLowerCase() === name.toLowerCase()) return String(r[key] || '').trim();
+              }
+            }
+            return '';
+          };
+
+          const variant = getVal(['Variant', 'VARIANT', 'Variant Code', 'SKU']);
+          if (!variant) return;
+
+          r._variant = variant;
+          r._design = variant.length >= 9 ? variant.slice(2, 9).toUpperCase() : variant.toUpperCase();
+          r._store = getVal(['Storecode', 'Store Code', 'STORECODE', 'STORE']);
+          r._cat = getVal(['Product category', 'PRODUCT CATEGORY', 'Category', 'Cat']);
+          r._cluster = getVal(['CLUSTER', 'Cluster']);
+          r._ag = getVal(['AG', 'AG Group', 'AG_GROUP']);
+          r._size = getVal(['Size', 'SIZE']);
+          r._karat = getVal(['Karat', 'KARAT']);
+          r._prolif = getVal(['Prolif', 'PROLIF']);
+          r._wt = parseFloat(getVal(['WT', 'Weight', 'Gross Wt'])) || 0;
+
+          rawData.push(r);
+        });
+
+        document.getElementById('authOverlay').style.display = 'none';
+        applyFilters();
+      } catch (e) {
+        console.error(e);
+        errBox.innerText = "Incorrect PIN. Access Denied.";
+        errBox.style.display = 'block';
       }
     }
 
-    document.getElementById('excelInput').addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      originalFileName = file.name;
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        parseWorkbookArray(new Uint8Array(evt.target.result), file.name);
-        document.getElementById('sourceStatus').innerHTML = `🟢 Loaded local file: <b>${file.name}</b> (${Object.keys(DB).length} products)`;
-      };
-      reader.readAsArrayBuffer(file);
-    });
+    function handleUniversalSearch() {
+      applyFilters();
+    }
 
-    function parseWorkbookArray(uint8Data, fileName) {
-      originalFileName = fileName;
-      uploadedWorkbook = XLSX.read(uint8Data, { type: 'array', cellFormula: true, cellStyles: true });
-      
-      pendingSheetName = uploadedWorkbook.SheetNames.find(n => n.trim().toLowerCase() === 'pending') || uploadedWorkbook.SheetNames[0];
-      const sheet = uploadedWorkbook.Sheets[pendingSheetName];
-      
-      const range = XLSX.utils.decode_range(sheet['!ref']);
-      scannedColIndex = -1;
-      for (let C = range.s.c; C <= range.e.c; ++C) {
-        const cellAddress = XLSX.utils.encode_cell({ r: range.s.r, c: C });
-        const cell = sheet[cellAddress];
-        if (cell && String(cell.v).trim().toLowerCase() === 'scanned') {
-          scannedColIndex = C;
-          break;
-        }
-      }
-      if (scannedColIndex === -1) {
-        scannedColIndex = range.e.c + 1;
-        const headerCell = XLSX.utils.encode_cell({ r: range.s.r, c: scannedColIndex });
-        sheet[headerCell] = { t: 's', v: 'Scanned' };
-        range.e.c = scannedColIndex;
-        sheet['!ref'] = XLSX.utils.encode_range(range);
-      }
+    /* Precision Search Engine: Pinpoints Exact Weight Reverse Lookups Alongside Words */
+    function getContextualRows(excludeKey = null) {
+      const wtOp = document.getElementById('wtOp').value;
+      const wt1 = parseFloat(document.getElementById('wtVal1').value);
+      const wt2 = parseFloat(document.getElementById('wtVal2').value);
+      const rawInput = (document.getElementById('skuSearchInput')?.value || '').trim();
 
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-      
-      DB = {};
-      LotDB = {};
-      scannedItems = [];
-      scannedRowIndices.clear();
-      
-      rows.forEach((r, idx) => {
-        const rowIndex = idx + 1;
-        const getVal = (keys) => {
-          for (const k of keys) {
-            for (const rowKey of Object.keys(r)) {
-              if (rowKey.trim().toLowerCase() === k.toLowerCase()) return String(r[rowKey] || '').trim();
-            }
+      const textTokens = [];
+      const weightTargets = [];
+
+      if (rawInput.length > 0) {
+        const tokens = rawInput.toLowerCase().split(/\s+/).filter(Boolean);
+        tokens.forEach(tok => {
+          const num = parseFloat(tok);
+          // If the token is pure numeric with optional decimals (e.g., "4.25" or "18.300")
+          if (!isNaN(num) && /^[0-9]+(\.[0-9]+)?$/.test(tok)) {
+            weightTargets.push(num);
+          } else {
+            textTokens.push(tok);
           }
-          return '';
-        };
+        });
+      }
 
-        const variant = getVal(['Variant', 'Variant Code', 'SKU']);
-        const lotno = getVal(['Lotno', 'Lot Number', 'Lot No']);
-        let mergeKey = getVal(['Merge', '23 Digit code', '23 DIGIT CODE']);
-
-        if (!mergeKey || mergeKey.startsWith('=')) {
-          mergeKey = `${variant}${lotno}`;
+      return rawData.filter(r => {
+        // 1. Text Field Matching (SKU, AG, Store, Category, Cluster, Karat)
+        if (textTokens.length > 0) {
+          const searchableText = `${r._variant} ${r._design} ${r._store} ${r._cat} ${r._cluster} ${r._ag} ${r._karat}K ${r._size}`.toLowerCase();
+          const allTextMatch = textTokens.every(term => searchableText.includes(term));
+          if (!allTextMatch) return false;
         }
 
-        const itemObj = {
-          merge: mergeKey,
-          v: variant,
-          l: lotno,
-          w: getVal(['Weight', 'WT', 'Gross Wt']),
-          q: getVal(['Qnty', 'Qty']) || 1,
-          c: getVal(['Category', 'Final Category']),
-          g: getVal(['Group', 'Final Group']),
-          setof: getVal(['Setof', 'Set Of']) || '-',
-          stn: getVal(['STN No', 'STN', 'STNNO']),
-          docket: getVal(['Docket No', 'Docket']),
-          loc: getVal(['Location', 'LOC']),
-          rowIndex: rowIndex,
-          rawRow: r
-        };
+        // 2. Exact Weight Reverse Pinpoint (Matches within tight ±0.005g threshold)
+        if (weightTargets.length > 0) {
+          const w = r._wt;
+          const isWeightPinpointed = weightTargets.some(target => Math.abs(w - target) <= 0.005);
+          if (!isWeightPinpointed) return false;
+        }
 
-        if (mergeKey) DB[mergeKey.toUpperCase()] = itemObj;
-        if (lotno) LotDB[lotno.toUpperCase()] = itemObj;
+        // 3. Dropdown Checklist Filters
+        for (const key of Object.keys(filterFields)) {
+          if (key === excludeKey) continue;
+          const sel = filterFields[key].selected;
+          if (sel.size > 0 && !sel.has(String(r[filterFields[key].col] || '(Blank)').trim())) return false;
+        }
+
+        // 4. Standalone Dedicated Weight Filter (Preserved for broad range browsing)
+        if (wtOp !== 'any' && !isNaN(wt1)) {
+          const w = r._wt;
+          if (wtOp === 'eq' && Math.abs(w - wt1) > 0.0001) return false;
+          if (wtOp === 'gt' && w <= wt1) return false;
+          if (wtOp === 'gte' && w < wt1) return false;
+          if (wtOp === 'lt' && w >= wt1) return false;
+          if (wtOp === 'lte' && w > wt1) return false;
+          if (wtOp === 'between') {
+            if (isNaN(wt2)) return false;
+            if (w < Math.min(wt1, wt2) || w > Math.max(wt1, wt2)) return false;
+          }
+        }
+        return true;
+      });
+    }
+
+    function refreshDropdownMenus() {
+      Object.keys(filterFields).forEach(key => {
+        const eligibleRows = getContextualRows(key);
+        const colField = filterFields[key].col;
+        const counts = {};
+        eligibleRows.forEach(r => {
+          const val = String(r[colField] || '(Blank)').trim();
+          counts[val] = (counts[val] || 0) + 1;
+        });
+
+        filterFields[key].selected.forEach(selVal => {
+          if (!counts[selVal]) counts[selVal] = 0;
+        });
+
+        const listContainer = document.getElementById(`list-${key}`);
+        const currentSearch = (document.querySelector(`#menu-${key} .dropdown-search`)?.value || '').toLowerCase();
+        listContainer.innerHTML = '';
+
+        const allAvailableKeys = Object.keys(counts).sort();
+        let checkedCount = 0;
+
+        allAvailableKeys.forEach(val => {
+          const isChecked = filterFields[key].selected.has(val);
+          if (isChecked) checkedCount++;
+          const item = document.createElement('label');
+          item.className = 'dropdown-item';
+          if (currentSearch && !val.toLowerCase().includes(currentSearch)) {
+            item.style.display = 'none';
+          }
+          item.innerHTML = `<input type="checkbox" value="${val}" ${isChecked ? 'checked' : ''} onchange="handleCheckboxChange('${key}', '${val}', this.checked)"><span>${val} <small style="color:var(--text-muted)">(${counts[val]})</small></span>`;
+          listContainer.appendChild(item);
+        });
+
+        const selectAllChk = document.getElementById(`chk-all-${key}`);
+        const selectAllLbl = document.getElementById(`lbl-all-${key}`);
+        if (selectAllChk) {
+          selectAllChk.checked = (checkedCount === allAvailableKeys.length && allAvailableKeys.length > 0);
+          selectAllChk.indeterminate = (checkedCount > 0 && checkedCount < allAvailableKeys.length);
+        }
+        if (selectAllLbl) {
+          selectAllLbl.innerText = `${checkedCount} / ${allAvailableKeys.length}`;
+        }
+
+        updateDropdownBtnLabel(key);
+      });
+    }
+
+    function toggleSelectAllDropdown(key) {
+      const eligibleRows = getContextualRows(key);
+      const colField = filterFields[key].col;
+      const allVals = Array.from(new Set(eligibleRows.map(r => String(r[colField] || '(Blank)').trim())));
+
+      const isAllCurrentlySelected = allVals.length > 0 && allVals.every(v => filterFields[key].selected.has(v));
+
+      if (isAllCurrentlySelected) {
+        filterFields[key].selected.clear();
+      } else {
+        allVals.forEach(v => filterFields[key].selected.add(v));
+      }
+      applyFilters();
+    }
+
+    function filterChecklist(key, search) {
+      const s = search.toLowerCase();
+      const container = document.getElementById(`list-${key}`);
+      container.querySelectorAll('.dropdown-item').forEach(lbl => {
+        const txt = lbl.innerText.toLowerCase();
+        lbl.style.display = txt.includes(s) ? 'flex' : 'none';
+      });
+    }
+
+    function handleCheckboxChange(key, val, isChecked) {
+      if (isChecked) filterFields[key].selected.add(val);
+      else filterFields[key].selected.delete(val);
+      applyFilters();
+    }
+
+    function updateDropdownBtnLabel(key) {
+      const btn = document.querySelector(`#fb-${key} .dropdown-btn`);
+      const count = filterFields[key].selected.size;
+      const baseName = { store:'Stores', cat:'Categories', cluster:'Clusters', ag:'AGs', size:'Sizes', karat:'Karats', prolif:'Prolifs' }[key];
+      btn.innerText = count === 0 ? `All ${baseName}` : `${count} ${baseName} Selected`;
+    }
+
+    function handleWtOpChange() {
+      const op = document.getElementById('wtOp').value;
+      const v1 = document.getElementById('wtVal1'), v2 = document.getElementById('wtVal2'), sp = document.getElementById('wtBetweenSpan');
+      v1.style.display = op === 'any' ? 'none' : 'inline-block';
+      v2.style.display = op === 'between' ? 'inline-block' : 'none';
+      sp.style.display = op === 'between' ? 'inline-block' : 'none';
+      applyFilters();
+    }
+
+    function resetAllFilters() {
+      Object.keys(filterFields).forEach(key => filterFields[key].selected.clear());
+      document.getElementById('skuSearchInput').value = '';
+      document.getElementById('wtOp').value = 'any';
+      document.getElementById('wtVal1').value = '';
+      document.getElementById('wtVal2').value = '';
+      document.querySelectorAll('.dropdown-search').forEach(input => input.value = '');
+
+      const v1 = document.getElementById('wtVal1');
+      const v2 = document.getElementById('wtVal2');
+      const span = document.getElementById('wtBetweenSpan');
+      v1.style.display = 'none';
+      v2.style.display = 'none';
+      span.style.display = 'none';
+
+      applyFilters();
+    }
+
+    function applyFilters() {
+      const rows = getContextualRows(null);
+      const groupMap = new Map();
+      rows.forEach(r => {
+        if (!groupMap.has(r._variant)) groupMap.set(r._variant, { variant: r._variant, design: r._design, rows: [] });
+        groupMap.get(r._variant).rows.push(r);
+      });
+      filteredGroups = Array.from(groupMap.values());
+      currentIdx = 0;
+      activeStoreFilter = null;
+      refreshDropdownMenus();
+      updateUI(rows.length);
+    }
+
+    function updateUI(totalMatchedRows) {
+      document.getElementById('statVariantCount').innerText = filteredGroups.length;
+      document.getElementById('statMaxIdx').innerText = filteredGroups.length;
+      document.getElementById('exportCount').innerText = selectedVariantsMap.size;
+      document.getElementById('statSelectedCount').innerText = selectedVariantsMap.size;
+
+      const count = (totalMatchedRows !== undefined) ? totalMatchedRows : filteredGroups.reduce((acc, g) => acc + g.rows.length, 0);
+      document.getElementById('statTotalUnits').innerText = `(Total Units: ${count})`;
+
+      if (filteredGroups.length === 0) return;
+      const cur = filteredGroups[currentIdx];
+      document.getElementById('statCurIdx').innerText = currentIdx + 1;
+
+      const img = document.getElementById('itemImg');
+      img.style.opacity = '0';
+      img.style.display = 'block';
+      document.getElementById('imgFallback').style.display = 'none';
+      document.getElementById('imgLoader').style.display = 'flex';
+
+      const dCode = (cur.design || '').trim().toUpperCase();
+      img.dataset.retried = "0";
+      img.src = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${dCode}.jpg`;
+
+      if (filteredGroups[currentIdx + 1]) {
+        const nextD = (filteredGroups[currentIdx + 1].design || '').trim().toUpperCase();
+        const p = new Image();
+        p.src = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${nextD}.jpg`;
+      }
+
+      document.getElementById('dispVariant').innerText = cur.variant;
+      document.getElementById('dispAG').innerText = cur.rows[0]._ag || 'N/A';
+      document.getElementById('dispCat').innerText = cur.rows[0]._cat || '-';
+      document.getElementById('dispCluster').innerText = cur.rows[0]._cluster || '-';
+      document.getElementById('dispKaratProlif').innerText = `${cur.rows[0]._karat}K | P: ${cur.rows[0]._prolif}`;
+
+      const totalQty = cur.rows.length;
+      document.getElementById('dispTotalQty').innerText = `${totalQty} pcs`;
+
+      const sizes = Array.from(new Set(cur.rows.map(r => r._size))).filter(Boolean);
+      document.getElementById('dispSizesText').innerText = sizes.join(', ') || 'N/A';
+
+      const weights = cur.rows.map(r => r._wt);
+      document.getElementById('dispWtRangeText').innerText = `${Math.min(...weights).toFixed(3)} - ${Math.max(...weights).toFixed(3)} g`;
+
+      const storeMap = {};
+      cur.rows.forEach(r => { storeMap[r._store] = (storeMap[r._store] || 0) + 1; });
+      const storeKeys = Object.keys(storeMap).sort();
+      document.getElementById('dispStoreCount').innerText = storeKeys.length;
+
+      const storeChips = document.getElementById('dispStoreChips');
+      storeChips.innerHTML = '';
+      const allC = document.createElement('div');
+      allC.className = `chip ${activeStoreFilter === null ? 'active' : ''}`;
+      allC.innerText = `All (${totalQty})`;
+      allC.onclick = () => { activeStoreFilter = null; renderDetailedTray(cur); updateStoreChipsUI(); };
+      storeChips.appendChild(allC);
+
+      storeKeys.forEach(st => {
+        const c = document.createElement('div');
+        c.className = `chip ${activeStoreFilter === st ? 'active' : ''}`;
+        c.innerText = `${st} (${storeMap[st]})`;
+        c.onclick = () => { activeStoreFilter = activeStoreFilter === st ? null : st; renderDetailedTray(cur); updateStoreChipsUI(); };
+        storeChips.appendChild(c);
       });
 
-      document.getElementById('dbCount').innerText = Object.keys(DB).length;
-      document.getElementById('scanCount').innerText = 0;
-      updateHistoryUI();
-      if (!isMobileDevice) scanInput.focus();
+      const isConf = selectedVariantsMap.has(cur.variant);
+      const confBtn = document.getElementById('confirmBtn');
+      confBtn.innerText = isConf ? "✖ Remove Selection" : "✔ Confirm";
+      confBtn.className = isConf ? "btn-action btn-confirmed" : "btn-action btn-confirm";
+      document.getElementById('dispSelectedBadge').style.display = isConf ? "inline-block" : "none";
+
+      renderDetailedTray(cur);
+      document.getElementById('prevBtn').disabled = currentIdx === 0;
+      document.getElementById('nextBtn').disabled = currentIdx === filteredGroups.length - 1;
+
+      if (isLightboxOpen) syncLightboxContent();
     }
 
-    scanInput.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault(); 
-      }
-    });
-
-    scanInput.addEventListener('input', function() {
-      clearTimeout(scanTimeout);
-      scanTimeout = setTimeout(function() {
-        const val = scanInput.value.replace(/[\r\n\t\s]/g, '').trim();
-        if (val.length > 0) {
-          processCode(val, false);
-          scanInput.value = ""; 
-        }
-      }, 150); 
-    });
-
-    function findMatchingItem(rawText, isCamera = false) {
-      let clean = rawText.toUpperCase().replace(/[\r\n\t\s]/g, '');
-
-      if (DB[clean]) return DB[clean];
-
-      // If from camera, strip first 7 chars (e.g. H1FDMAI) to preserve full variant + conversion piece lotno
-      if (isCamera && clean.length > 14) {
-        const stripped = clean.substring(7);
-        if (DB[stripped]) return DB[stripped];
-      }
-
-      if (clean.length > 21) {
-        const strippedFallback = clean.substring(7);
-        if (DB[strippedFallback]) return DB[strippedFallback];
-      }
-
-      if (LotDB[clean]) return LotDB[clean];
-
-      for (const mergeKey in DB) {
-        if (clean.includes(mergeKey)) {
-          return DB[mergeKey];
-        }
-      }
-
-      return null;
+    function updateStoreChipsUI() {
+      document.querySelectorAll('#dispStoreChips .chip').forEach((c, i) => {
+        c.className = i === 0 ? `chip ${activeStoreFilter === null ? 'active' : ''}` : `chip ${c.innerText.startsWith(activeStoreFilter + ' ') ? 'active' : ''}`;
+      });
     }
 
-    function processCode(rawText, isCamera = false) {
-      // Prevent on-screen keyboard from popping up on mobile
-      if (isMobileDevice) {
-        scanInput.blur();
-        if (document.activeElement) document.activeElement.blur();
-      }
-
-      const card = document.getElementById('resultCard');
-      const statusText = document.getElementById('statusText');
-      const productContent = document.getElementById('productContent');
-      const productImg = document.getElementById('productImg');
-      const imgLoader = document.getElementById('imgLoader');
-      const imgFallback = document.getElementById('imgFallback');
-      const idleDetails = document.getElementById('idleDetails');
-      const rawDisplay = document.getElementById('rawDisplay');
-
-      rawDisplay.innerText = `Full Scanned Code: ${rawText}`;
-
-      const item = findMatchingItem(rawText, isCamera);
-
-      if (item) {
-        currentMatchedItem = item;
-        card.className = "card found";
-        statusText.innerText = "MATCH FOUND";
-        statusText.style.color = "#34d399";
-        
-        // Haptic feedback (gentle vibration on mobile device)
-        if (navigator.vibrate) {
-          navigator.vibrate([40, 50, 40]);
-        }
-
-        document.getElementById('dispVariant').innerText = item.v || '---';
-        document.getElementById('dispLot').innerText = item.l || '-';
-        document.getElementById('dispWeight').innerText = parseFloat(item.w || 0).toFixed(3);
-        document.getElementById('dispCat').innerText = item.c || '-';
-        document.getElementById('dispGroup').innerText = item.g || '-';
-
-        const imgKey = (item.v && item.v.length >= 9) ? item.v.slice(2, 9).toUpperCase() : item.v.toUpperCase();
-        const imgUrl = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${imgKey}.jpg`;
-
-        productImg.style.opacity = '0';
-        productImg.style.display = 'block';
-        imgFallback.style.display = 'none';
-        imgLoader.style.display = 'flex';
-
-        productImg.dataset.retried = "0";
-        productImg.src = imgUrl;
-
-        productContent.style.display = 'flex';
-        idleDetails.style.display = 'none';
-
-        scannedRowIndices.add(item.rowIndex);
-
-        if (!scannedItems.some(x => x.key === item.merge)) {
-          scannedItems.unshift({ 
-            key: item.merge, 
-            variant: item.v,
-            lotno: item.l,
-            wt: item.w,
-            cat: item.c, 
-            grp: item.g, 
-            stn: item.stn, 
-            qnty: item.q,
-            setof: item.setof,
-            docket: item.docket,
-            loc: item.loc,
-            imgUrl: imgUrl,
-            time: new Date().toLocaleTimeString() 
-          });
-          document.getElementById('scanCount').innerText = scannedItems.length;
-          updateHistoryUI();
-        }
-
-        // Smooth scroll to display card on mobile
-        if (isMobileDevice) {
-          card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-      } else {
-        currentMatchedItem = null;
-        card.className = "card not-found";
-        statusText.innerText = "NOT IN PENDING LIST";
-        statusText.style.color = "#f87171";
-
-        productContent.style.display = 'none';
-        idleDetails.style.display = 'block';
-        idleDetails.innerText = Object.keys(DB).length === 0 ? "Dataset not loaded yet! Verify file in repo or upload manually." : "This product does not match any record in the sheet.";
-      }
-    }
-
-    /* MOBILE CAMERA ENGINE */
-    async function startMobileCamera() {
-      // Dismiss keyboard immediately
-      if (document.activeElement) document.activeElement.blur();
-      scanInput.blur();
-
-      const modal = document.getElementById('cameraModal');
-      modal.classList.add('active');
-
-      if (!html5QrScanner) {
-        html5QrScanner = new Html5Qrcode("cameraReaderView");
-      }
-
-      const config = {
-        fps: 20,
-        qrbox: { width: 300, height: 110 },
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.PDF_417,
-          Html5QrcodeSupportedFormats.QR_CODE,
-          Html5QrcodeSupportedFormats.DATA_MATRIX,
-          Html5QrcodeSupportedFormats.CODE_128
-        ],
-        experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true
-        }
-      };
-
-      try {
-        await html5QrScanner.start(
-          { facingMode: "environment" },
-          config,
-          (decodedText) => {
-            if (decodedText) {
-              processCode(decodedText, true);
-              stopMobileCamera();
-            }
-          },
-          (errorMessage) => {}
-        );
-
-        setTimeout(() => {
-          const videoEl = document.querySelector("#cameraReaderView video");
-          if (videoEl && videoEl.srcObject) {
-            const tracks = videoEl.srcObject.getVideoTracks();
-            if (tracks.length > 0) cameraTrack = tracks[0];
-          }
-        }, 800);
-
-      } catch (err) {
-        console.error("Camera start failed:", err);
-        alert("Camera error: Ensure camera permission is allowed and site is served over HTTPS.");
-        stopMobileCamera();
-      }
-    }
-
-    function stopMobileCamera() {
-      if (html5QrScanner) {
-        html5QrScanner.stop().then(() => {
-          document.getElementById('cameraModal').classList.remove('active');
-          cameraTrack = null;
-          isTorchOn = false;
-          // Only refocus on desktop
-          if (!isMobileDevice) scanInput.focus();
-        }).catch(() => {
-          document.getElementById('cameraModal').classList.remove('active');
-          if (!isMobileDevice) scanInput.focus();
-        });
-      } else {
-        document.getElementById('cameraModal').classList.remove('active');
-      }
-    }
-
-    function triggerCameraRefocus() {
-      if (cameraTrack && cameraTrack.applyConstraints) {
-        cameraTrack.applyConstraints({
-          advanced: [{ focusMode: "continuous" }]
-        }).catch(() => {});
-      }
-    }
-
-    async function toggleTorch() {
-      if (!cameraTrack) return;
-      try {
-        const capabilities = cameraTrack.getCapabilities ? cameraTrack.getCapabilities() : {};
-        if (capabilities.torch) {
-          isTorchOn = !isTorchOn;
-          await cameraTrack.applyConstraints({
-            advanced: [{ torch: isTorchOn }]
-          });
-          document.getElementById('torchToggleBtn').innerText = isTorchOn ? "💡 Torch ON" : "🔦 Torch";
-        } else {
-          alert("Flashlight / Torch not supported on this camera.");
-        }
-      } catch (e) {
-        console.warn("Torch failed:", e);
-      }
+    function renderDetailedTray(cur) {
+      const tbody = document.getElementById('trayTbody');
+      tbody.innerHTML = '';
+      const rows = activeStoreFilter ? cur.rows.filter(r => r._store === activeStoreFilter) : cur.rows;
+      document.getElementById('trayHeader').innerText = activeStoreFilter ? `Available Lots for ${activeStoreFilter} (${rows.length} lots)` : `Available Lots (All Stores - ${rows.length} lots)`;
+      rows.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><b>${r._store}</b></td><td style="font-family:monospace; color:var(--primary);">${r['Lotno']}</td><td>${r['Qty'] || 1}</td><td><b>${r._wt.toFixed(3)}</b></td><td>${r._size}</td><td>₹${Number(r['Val']||0).toLocaleString('en-IN')}</td>`;
+        tbody.appendChild(tr);
+      });
     }
 
     function handleImageSuccess() {
       document.getElementById('imgLoader').style.display = 'none';
-      document.getElementById('productImg').style.opacity = '1';
+      document.getElementById('itemImg').style.opacity = '1';
     }
 
     function handleImageError() {
-      const img = document.getElementById('productImg');
-      if (!currentMatchedItem) return;
-      const dCode = (currentMatchedItem.v && currentMatchedItem.v.length >= 9) ? currentMatchedItem.v.slice(2, 9).toUpperCase() : currentMatchedItem.v.toUpperCase();
+      const img = document.getElementById('itemImg');
+      const cur = filteredGroups[currentIdx];
+      const dCode = (cur?.design || '').trim().toUpperCase();
 
       if (img.dataset.retried === "0") {
         img.dataset.retried = "1";
@@ -954,209 +997,341 @@
       img.style.display = 'none';
       const fallback = document.getElementById('imgFallback');
       fallback.style.display = 'flex';
-      document.getElementById('fallbackDesignTag').innerText = `Design: ${dCode || 'N/A'}`;
+      fallback.style.flexDirection = 'column';
+      fallback.style.alignItems = 'center';
+      fallback.style.justifyContent = 'center';
+      fallback.innerHTML = `
+        <div style="font-size: 2.2rem; margin-bottom: 6px;">🖼️</div>
+        <div style="font-weight: 700; color: #334155;">No Catalog Image Found</div>
+        <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px;">Design: ${dCode || 'N/A'}</div>
+      `;
     }
 
+    /* Lightbox Modal Operations */
     function openLightbox() {
-      if (!currentMatchedItem) return;
-      const dCode = (currentMatchedItem.v && currentMatchedItem.v.length >= 9) ? currentMatchedItem.v.slice(2, 9).toUpperCase() : currentMatchedItem.v.toUpperCase();
-      document.getElementById('modalDesignBadge').innerText = dCode;
-      document.getElementById('modalImg').src = document.getElementById('productImg').src;
+      if (filteredGroups.length === 0) return;
+      isLightboxOpen = true;
       document.getElementById('lightboxModal').classList.add('active');
+      syncLightboxContent();
     }
 
     function closeLightbox() {
+      isLightboxOpen = false;
       document.getElementById('lightboxModal').classList.remove('active');
-      if (!isMobileDevice) scanInput.focus();
+    }
+
+    function handleLightboxBackdropClick(e) {
+      if (e.target.id === 'lightboxModal') {
+        closeLightbox();
+      }
+    }
+
+    function syncLightboxContent() {
+      if (!isLightboxOpen || filteredGroups.length === 0) return;
+
+      const curGroup = filteredGroups[currentIdx];
+      const dCode = (curGroup.design || '').trim().toUpperCase();
+
+      document.getElementById('modalDesignBadge').innerText = dCode;
+      document.getElementById('modalMetaTag').innerText = `${curGroup.rows[0]._cat} • ${curGroup.rows[0]._karat}K`;
+      
+      const weights = curGroup.rows.map(r => r._wt);
+      const minWt = Math.min(...weights).toFixed(3);
+      const maxWt = Math.max(...weights).toFixed(3);
+      document.getElementById('modalWtTag').innerText = (minWt === maxWt) ? `WT: ${minWt} g` : `WT: ${minWt} - ${maxWt} g`;
+      document.getElementById('modalIdxTag').innerText = `${currentIdx + 1} of ${filteredGroups.length}`;
+
+      const modalImg = document.getElementById('modalImg');
+      const modalLoader = document.getElementById('modalImgLoader');
+      const modalFallback = document.getElementById('modalFallback');
+
+      modalImg.style.opacity = '0';
+      modalImg.style.display = 'block';
+      modalFallback.style.display = 'none';
+      modalLoader.style.display = 'flex';
+
+      modalImg.dataset.retried = "0";
+      modalImg.src = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${dCode}.jpg`;
+
+      const isConf = selectedVariantsMap.has(curGroup.variant);
+      const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+      modalConfirmBtn.innerText = isConf ? "✖ Remove Selection" : "✔ Confirm Selection";
+      modalConfirmBtn.className = isConf ? "btn-action btn-confirmed" : "btn-action btn-confirm";
+
+      document.getElementById('modalPrevBtn').disabled = (currentIdx === 0);
+      document.getElementById('modalNextBtn').disabled = (currentIdx === filteredGroups.length - 1);
+    }
+
+    function handleModalImgSuccess() {
+      document.getElementById('modalImgLoader').style.display = 'none';
+      document.getElementById('modalImg').style.opacity = '1';
+    }
+
+    function handleModalImgError() {
+      const img = document.getElementById('modalImg');
+      const curGroup = filteredGroups[currentIdx];
+      const dCode = (curGroup?.design || '').trim().toUpperCase();
+
+      if (img.dataset.retried === "0") {
+        img.dataset.retried = "1";
+        img.src = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${dCode}.JPG`;
+        return;
+      }
+
+      document.getElementById('modalImgLoader').style.display = 'none';
+      img.style.display = 'none';
+      const fallback = document.getElementById('modalFallback');
+      fallback.style.display = 'flex';
+      fallback.style.flexDirection = 'column';
+      fallback.style.alignItems = 'center';
+      fallback.style.justifyContent = 'center';
+      fallback.innerHTML = `
+        <div style="font-size: 3rem; margin-bottom: 6px;">🖼️</div>
+        <div style="font-weight: 700; color: #334155;">No Catalog Image Found</div>
+        <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 4px;">Design: ${dCode || 'N/A'}</div>
+      `;
+    }
+
+    let touchStartX = 0;
+    let touchEndX = 0;
+    const lightboxBody = document.getElementById('lightboxBody');
+
+    lightboxBody.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+
+    lightboxBody.addEventListener('touchend', (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      if (touchEndX < touchStartX - 50) navigateVariant(1);
+      if (touchEndX > touchStartX + 50) navigateVariant(-1);
+    }, { passive: true });
+
+    function toggleConfirmCurrent() {
+      const cur = filteredGroups[currentIdx];
+      if (selectedVariantsMap.has(cur.variant)) selectedVariantsMap.delete(cur.variant);
+      else selectedVariantsMap.set(cur.variant, cur.rows);
+      updateUI();
+    }
+
+    /* Bulk Selection Actions */
+    function selectAllFilteredVariants() {
+      if (filteredGroups.length === 0) return;
+      filteredGroups.forEach(grp => {
+        selectedVariantsMap.set(grp.variant, grp.rows);
+      });
+      updateUI();
+    }
+
+    function unselectAllVariants() {
+      if (selectedVariantsMap.size === 0) return;
+      selectedVariantsMap.clear();
+      updateUI();
+    }
+
+    function navigateVariant(s) {
+      const n = currentIdx + s;
+      if (n >= 0 && n < filteredGroups.length) { 
+        currentIdx = n; 
+        activeStoreFilter = null; 
+        updateUI(); 
+      }
     }
 
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
+      if (filteredGroups.length === 0 || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        navigateVariant(1);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        navigateVariant(-1);
+      } else if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        toggleConfirmCurrent();
+      } else if (e.key === 'Escape' && isLightboxOpen) {
         closeLightbox();
-        closePDFModal();
-        stopMobileCamera();
       }
     });
 
-    function updateHistoryUI() {
-      const tbody = document.getElementById('historyBody');
-      if (scannedItems.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#64748b; padding:18px;">No items scanned yet</td></tr>';
-        return;
+    /* Export Modal Management */
+    function openExportModal() {
+      if (selectedVariantsMap.size === 0) { 
+        alert("No variants confirmed yet."); 
+        return; 
       }
-      tbody.innerHTML = scannedItems.map(item => `
-        <tr>
-          <td style="color:#94a3b8;">${item.time}</td>
-          <td><b style="color:#38bdf8;">${item.variant}</b></td>
-          <td style="font-family: monospace;">${item.lotno}</td>
-          <td><b>${parseFloat(item.wt || 0).toFixed(3)}g</b></td>
-          <td>${item.cat}</td>
-          <td>${item.grp}</td>
-          <td>${item.stn}</td>
-        </tr>
-      `).join('');
+      document.getElementById('exportModal').classList.add('active');
     }
 
-    function exportExcel() {
-      if (!uploadedWorkbook) return alert('Dataset is not loaded yet!');
-
-      const sheet = uploadedWorkbook.Sheets[pendingSheetName];
-      const range = XLSX.utils.decode_range(sheet['!ref']);
-
-      for (let R = range.s.r + 1; R <= range.e.r; ++R) {
-        const cellAddress = XLSX.utils.encode_cell({ r: R, c: scannedColIndex });
-        const isScanned = scannedRowIndices.has(R);
-        sheet[cellAddress] = { t: 's', v: isScanned ? 'Yes' : 'No' };
-      }
-
-      const baseName = originalFileName.replace(/\.[^/.]+$/, "");
-      const outputName = `${baseName}_Inwarded_${new Date().toISOString().slice(0, 10)}.xlsx`;
-      XLSX.writeFile(uploadedWorkbook, outputName);
+    function closeExportModal() {
+      document.getElementById('exportModal').classList.remove('active');
     }
 
-    function openPDFModal() {
-      if (scannedItems.length === 0) return alert('No items verified yet!');
-      document.getElementById('pdfModal').classList.add('active');
+    /* Option 1: Excel Export */
+    function exportSelectedExcel() {
+      closeExportModal();
+      const rows = [];
+      selectedVariantsMap.forEach(grp => grp.forEach(r => {
+        const c = { ...r };
+        delete c._variant; delete c._design; delete c._store; delete c._cat; delete c._cluster; delete c._ag; delete c._size; delete c._karat; delete c._prolif; delete c._wt;
+        rows.push(c);
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Selected");
+      XLSX.writeFile(wb, `South1_Selected_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
 
-    function closePDFModal() {
-      document.getElementById('pdfModal').classList.remove('active');
-      if (!isMobileDevice) scanInput.focus();
-    }
+    /* Option 2: Configurable 2x2 Grid PDF Export */
+    async function exportSelectedPDF() {
+      const actionBtn = document.getElementById('pdfExportActionBtn');
+      actionBtn.disabled = true;
+      actionBtn.innerText = "⏳ Generating 2x2 PDF...";
 
-    async function getBase64Image(url) {
-      try {
-        const response = await fetch(url);
-        if (!response.ok) return null;
-        const blob = await response.blob();
-        return new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.onerror = () => resolve(null);
-          reader.readAsDataURL(blob);
-        });
-      } catch (e) {
-        return null;
-      }
-    }
+      const incVariant = document.getElementById('pdfChkVariant').checked;
+      const incWt = document.getElementById('pdfChkWt').checked;
+      const incCat = document.getElementById('pdfChkCat').checked;
+      const incAg = document.getElementById('pdfChkAg').checked;
+      const incCluster = document.getElementById('pdfChkCluster').checked;
+      const incSize = document.getElementById('pdfChkSize').checked;
+      const incKarat = document.getElementById('pdfChkKarat').checked;
 
-    async function generate2x2PDF() {
-      const btn = document.getElementById('generatePdfBtn');
-      btn.innerText = "⏳ Building PDF...";
-      btn.disabled = true;
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      // Page Layout Configuration (A4: 210 x 297 mm)
+      const cols = 2;
+      const rowsPerPage = 2;
+      const itemsPerPage = cols * rowsPerPage; // 4 items per A4 sheet
+      
+      const cardWidth = 91;
+      const cardHeight = 128;
+      const startX = 10;
+      const startY = 14;
+      const gapX = 8;
+      const gapY = 10;
 
-      const incVariant = document.getElementById('chkPdfVariant').checked;
-      const incLot = document.getElementById('chkPdfLot').checked;
-      const incWeight = document.getElementById('chkPdfWeight').checked;
-      const incCat = document.getElementById('chkPdfCat').checked;
-      const incGroup = document.getElementById('chkPdfGroup').checked;
-      const incStn = document.getElementById('chkPdfStn').checked;
-      const incDocket = document.getElementById('chkPdfDocket').checked;
+      // Image Dimension & Positioning inside Card
+      const imgSize = 80; // 80mm x 80mm square image
+      const imgOffsetX = (cardWidth - imgSize) / 2; // Perfectly centered (5.5mm margin)
 
-      try {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('portrait', 'pt', 'a4');
+      let itemIndex = 0;
+      const uniqueVariants = Array.from(selectedVariantsMap.values());
 
-        const cardWidth = 265;
-        const cardHeight = 370;
-        const startX = 22;
-        const startY = 40;
-        const gapX = 20;
-        const gapY = 25;
-
-        const base64Images = await Promise.all(scannedItems.map(item => getBase64Image(item.imgUrl)));
-
-        for (let i = 0; i < scannedItems.length; i++) {
-          const item = scannedItems[i];
-          const imgBase64 = base64Images[i];
-
-          if (i > 0 && i % 4 === 0) {
-            doc.addPage();
-          }
-
-          const posInPage = i % 4;
-          const col = posInPage % 2;
-          const row = Math.floor(posInPage / 2);
-
-          const x = startX + col * (cardWidth + gapX);
-          const y = startY + row * (cardHeight + gapY);
-
-          doc.setFillColor(255, 255, 255);
-          doc.setDrawColor(220, 226, 235);
-          doc.roundedRect(x, y, cardWidth, cardHeight, 6, 6, 'FD');
-
-          const imgBoxW = cardWidth - 20;
-          const imgBoxH = 220;
-          const imgX = x + 10;
-          const imgY = y + 10;
-
-          if (imgBase64) {
-            doc.addImage(imgBase64, 'JPEG', imgX, imgY, imgBoxW, imgBoxH, undefined, 'FAST');
-          } else {
-            doc.setFillColor(248, 250, 252);
-            doc.rect(imgX, imgY, imgBoxW, imgBoxH, 'F');
-            doc.setFontSize(10);
-            doc.setTextColor(148, 163, 184);
-            doc.text("Image not available", imgX + imgBoxW / 2, imgY + imgBoxH / 2, { align: 'center' });
-          }
-
-          let textY = y + 245;
-
-          if (incVariant) {
-            doc.setFontSize(11);
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(2, 132, 199);
-            doc.text(item.variant || '---', x + 12, textY);
-            textY += 16;
-          }
-
-          doc.setFontSize(9);
-          doc.setFont("helvetica", "normal");
-          doc.setTextColor(51, 65, 85);
-
-          if (incLot) {
-            doc.text(`Lot No: ${item.lotno || '-'}`, x + 12, textY);
-            textY += 14;
-          }
-
-          if (incWeight) {
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(15, 23, 42);
-            doc.text(`Weight: ${parseFloat(item.wt || 0).toFixed(3)} g`, x + 12, textY);
-            doc.setFont("helvetica", "normal");
-            doc.setTextColor(51, 65, 85);
-            textY += 14;
-          }
-
-          if (incCat) {
-            doc.text(`Category: ${item.cat || '-'}`, x + 12, textY);
-            textY += 14;
-          }
-
-          if (incGroup) {
-            doc.text(`Group: ${item.grp || '-'}`, x + 12, textY);
-            textY += 14;
-          }
-
-          if (incStn) {
-            doc.text(`STN: ${item.stn || '-'}`, x + 12, textY);
-            textY += 14;
-          }
-
-          if (incDocket && item.docket) {
-            doc.text(`Docket: ${item.docket}`, x + 12, textY);
-          }
+      for (const grp of uniqueVariants) {
+        if (itemIndex > 0 && itemIndex % itemsPerPage === 0) {
+          pdf.addPage();
         }
 
-        doc.save(`Inwarding_Catalogue_2x2_${new Date().toISOString().slice(0, 10)}.pdf`);
-        closePDFModal();
-      } catch (err) {
-        console.error(err);
-        alert("Failed to build 2x2 PDF. Check browser console.");
-      } finally {
-        btn.innerText = "Generate PDF";
-        btn.disabled = false;
+        const pagePos = itemIndex % itemsPerPage;
+        const col = pagePos % cols;
+        const row = Math.floor(pagePos / cols);
+
+        const x = startX + col * (cardWidth + gapX);
+        const y = startY + row * (cardHeight + gapY);
+
+        // 1. Draw Outer Card Container
+        pdf.setDrawColor(203, 213, 225); // Slate border
+        pdf.setLineWidth(0.4);
+        pdf.setFillColor(255, 255, 255);
+        pdf.roundedRect(x, y, cardWidth, cardHeight, 3, 3, 'FD');
+
+        // 2. Load & Draw Product Image
+        const firstRow = grp[0];
+        const dCode = (firstRow._design || '').trim().toUpperCase();
+        const imgUrl = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${dCode}.jpg`;
+
+        try {
+          const base64Img = await fetchImageAsBase64(imgUrl);
+          pdf.addImage(base64Img, 'JPEG', x + imgOffsetX, y + 4, imgSize, imgSize);
+        } catch (e) {
+          pdf.setFillColor(248, 250, 252);
+          pdf.rect(x + imgOffsetX, y + 4, imgSize, imgSize, 'F');
+          pdf.setFontSize(8);
+          pdf.setTextColor(148, 163, 184);
+          pdf.text("Image Unavailable", x + cardWidth / 2, y + 44, { align: 'center' });
+        }
+
+        // 3. Divider Line
+        pdf.setDrawColor(241, 245, 249);
+        pdf.line(x + 5, y + 86, x + cardWidth - 5, y + 86);
+
+        // 4. Print Metadata Fields
+        let currentTextY = y + 91;
+
+        if (incVariant) {
+          pdf.setFontSize(10);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setTextColor(2, 132, 199); // Blue SKU header
+          pdf.text(firstRow._variant, x + 6, currentTextY);
+          currentTextY += 5.5;
+        }
+
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(51, 65, 85);
+
+        // Column 1 (Left details)
+        let col1Y = currentTextY;
+        if (incCat) {
+          pdf.text(`Cat: ${firstRow._cat || '-'}`, x + 6, col1Y);
+          col1Y += 4.5;
+        }
+        if (incAg) {
+          const agTrimmed = (firstRow._ag || '-').substring(0, 22);
+          pdf.text(`AG: ${agTrimmed}`, x + 6, col1Y);
+          col1Y += 4.5;
+        }
+        if (incCluster) {
+          pdf.text(`Cluster: ${firstRow._cluster || '-'}`, x + 6, col1Y);
+          col1Y += 4.5;
+        }
+        if (incSize) {
+          const sizes = Array.from(new Set(grp.map(r => r._size))).filter(Boolean).join(', ');
+          pdf.text(`Size: ${sizes || '-'}`, x + 6, col1Y);
+          col1Y += 4.5;
+        }
+
+        // Column 2 (Right details)
+        let col2Y = currentTextY;
+        const col2X = x + 48;
+        if (incWt) {
+          const weights = grp.map(r => r._wt);
+          const minWt = Math.min(...weights).toFixed(3);
+          const maxWt = Math.max(...weights).toFixed(3);
+          const wtStr = minWt === maxWt ? `${minWt}g` : `${minWt}-${maxWt}g`;
+          pdf.text(`WT: ${wtStr}`, col2X, col2Y);
+          col2Y += 4.5;
+        }
+        if (incKarat) {
+          pdf.text(`K: ${firstRow._karat || '-'}K | P: ${firstRow._prolif || '-'}`, col2X, col2Y);
+          col2Y += 4.5;
+        }
+
+        itemIndex++;
       }
+
+      pdf.save(`South1_Catalogue_2x2_${new Date().toISOString().slice(0,10)}.pdf`);
+      actionBtn.disabled = false;
+      actionBtn.innerText = "📄 Generate Visual PDF";
+      closeExportModal();
+    }
+
+    // Helper to safely load external images onto canvas for jsPDF
+    function fetchImageAsBase64(url) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || 400;
+          canvas.height = img.naturalHeight || 400;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = () => reject(new Error('Image fetch failed'));
+        img.src = url;
+      });
     }
   </script>
 </body>
