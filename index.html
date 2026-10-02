@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>PC Barcode Inwarding Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>PC & Mobile Inwarding Scanner</title>
   <!-- Excel Parser -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- jsPDF for 2x2 Grid Catalogue PDF Generation -->
@@ -20,26 +21,26 @@
       --text-muted: #94a3b8;
     }
 
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); color: var(--text); margin: 0; padding: 16px 14px 40px 14px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
     
     .header { width: 100%; max-width: 850px; text-align: center; margin-bottom: 12px; }
-    .header h2 { margin: 0 0 4px 0; font-size: 1.6rem; color: var(--primary); }
+    .header h2 { margin: 0 0 4px 0; font-size: 1.55rem; color: var(--primary); }
     .header p { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
 
     .file-box { width: 100%; max-width: 850px; background: var(--card-bg); padding: 12px; border-radius: 8px; border: 1px dashed var(--primary); text-align: center; margin-bottom: 12px; }
-    .file-box label { font-size: 0.9rem; color: var(--primary); cursor: pointer; display: block; font-weight: 600; }
+    .file-box label { font-size: 0.88rem; color: var(--primary); cursor: pointer; display: block; font-weight: 600; word-break: break-word; }
     .file-box input { display: none; }
 
-    .status-bar { width: 100%; max-width: 850px; display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 10px 18px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 12px; font-size: 0.9rem; }
+    .status-bar { width: 100%; max-width: 850px; display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 12px; font-size: 0.88rem; flex-wrap: wrap; gap: 8px; }
     .pulse-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); margin-right: 8px; animation: blink 1.2s infinite; }
 
     #scanInput {
       width: 100%;
       max-width: 850px;
-      padding: 14px;
+      padding: 13px;
       margin-bottom: 14px;
-      font-size: 1.2rem;
+      font-size: 1.15rem;
       font-weight: 700;
       color: var(--primary);
       background: #111c38;
@@ -49,9 +50,9 @@
       outline: none;
       box-shadow: 0 4px 12px rgba(56, 189, 248, 0.15);
     }
-    #scanInput::placeholder { color: #475569; font-weight: normal; font-size: 1rem; }
+    #scanInput::placeholder { color: #475569; font-weight: normal; font-size: 0.95rem; }
 
-    .card { width: 100%; max-width: 850px; border-radius: 12px; padding: 24px; text-align: center; min-height: 440px; display: flex; flex-direction: column; justify-content: center; }
+    .card { width: 100%; max-width: 850px; border-radius: 12px; padding: 22px; text-align: center; min-height: 440px; display: flex; flex-direction: column; justify-content: center; }
     .card.idle { background: var(--card-bg); border: 2px solid #475569; }
     .card.found { background: #064e3b; border: 3px solid var(--accent); }
     .card.not-found { background: #7f1d1d; border: 3px solid var(--danger); }
@@ -60,22 +61,30 @@
 
     .product-content { display: flex; align-items: stretch; justify-content: flex-start; gap: 24px; margin-top: 10px; width: 100%; }
     
-    /* Product image box with animated loader & fallback */
+    /* Product image box with tap-to-zoom cue */
     .product-img-wrapper { 
       width: 450px; height: 450px; min-width: 450px; 
       border-radius: 12px; overflow: hidden; background: #fff; 
       border: 3px solid var(--border); display: flex; align-items: center; justify-content: center;
-      position: relative;
+      position: relative; cursor: zoom-in;
     }
     .product-img { width: 100%; height: 100%; object-fit: contain; display: block; }
     
+    .zoom-hint {
+      position: absolute; bottom: 8px; right: 8px;
+      background: rgba(9, 14, 26, 0.75); color: #fff;
+      padding: 4px 8px; border-radius: 4px; font-size: 0.7rem;
+      pointer-events: none; backdrop-filter: blur(4px);
+      border: 1px solid var(--border);
+    }
+
     .img-loader { 
       position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; 
       gap: 10px; color: #0284c7; font-size: 0.85rem; font-weight: 700; background: #ffffff; 
       width: 100%; height: 100%; z-index: 5; 
     }
     .spinner { 
-      width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #0284c7; 
+      width: 38px; height: 38px; border: 4px solid #e2e8f0; border-top-color: #0284c7; 
       border-radius: 50%; animation: spin 0.8s linear infinite; 
     }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -88,8 +97,8 @@
     .product-info-right { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: left; }
     
     /* Display Hierarchy */
-    .variant-header { font-size: 2.1rem; font-weight: 800; color: #fff; margin: 0 0 6px 0; line-height: 1.1; font-family: monospace; }
-    .lot-label { font-size: 1.15rem; color: #cbd5e1; margin-bottom: 12px; font-family: monospace; }
+    .variant-header { font-size: 2rem; font-weight: 800; color: #fff; margin: 0 0 6px 0; line-height: 1.1; font-family: monospace; word-break: break-all; }
+    .lot-label { font-size: 1.15rem; color: #cbd5e1; margin-bottom: 10px; font-family: monospace; }
     
     /* Weight emphasis */
     .weight-highlight {
@@ -101,7 +110,7 @@
       padding: 6px 14px;
       border-radius: 8px;
       border: 1px solid var(--primary);
-      margin: 6px 0 14px 0;
+      margin: 6px 0 12px 0;
       line-height: 1.1;
     }
     .weight-unit { font-size: 1.1rem; font-weight: 700; color: var(--text-muted); margin-left: 4px; }
@@ -110,42 +119,95 @@
     .neutral-row { color: var(--text-muted); font-size: 1rem; font-weight: 400; margin-top: 4px; }
     .neutral-row span { color: #cbd5e1; }
 
-    .raw-code { font-family: monospace; font-size: 0.85rem; color: var(--text-muted); word-break: break-all; margin-top: 14px; }
+    .raw-code { font-family: monospace; font-size: 0.82rem; color: var(--text-muted); word-break: break-all; margin-top: 14px; }
 
     .history { width: 100%; max-width: 850px; margin-top: 20px; }
-    .history h4 { margin: 0 0 10px 0; font-size: 1rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; }
+    .history h4 { margin: 0 0 10px 0; font-size: 1rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
     
-    .btn-group { display: flex; gap: 8px; }
-    .action-btn { color: white; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; cursor: pointer; user-select: none; border: none; }
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+    .action-btn { color: white; padding: 8px 15px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; cursor: pointer; user-select: none; border: none; white-space: nowrap; }
     .csv-btn { background: #16a34a; }
     .csv-btn:hover { background: #15803d; }
     .pdf-btn { background: #2563eb; }
     .pdf-btn:hover { background: #1d4ed8; }
 
-    .history-table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 8px; overflow: hidden; font-size: 0.9rem; border: 1px solid var(--border); }
-    .history-table th { background: #0f172a; padding: 10px 12px; text-align: left; color: var(--text-muted); font-weight: 600; }
-    .history-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+    .table-container { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; border: 1px solid var(--border); }
+    .history-table { width: 100%; border-collapse: collapse; background: var(--card-bg); font-size: 0.88rem; min-width: 580px; }
+    .history-table th { background: #0f172a; padding: 10px 12px; text-align: left; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+    .history-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
     .history-table tr:last-child td { border-bottom: none; }
+
+    /* Floating Lightbox Viewer */
+    .lightbox-modal {
+      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(4, 7, 15, 0.95); backdrop-filter: blur(8px);
+      z-index: 10000; flex-direction: column; align-items: center; justify-content: center;
+      padding: 14px; user-select: none;
+    }
+    .lightbox-modal.active { display: flex; }
+    .lightbox-header { width: 100%; max-width: 700px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .lightbox-badge { font-size: 1.15rem; font-weight: 800; color: var(--primary); font-family: monospace; }
+    .lightbox-close-btn {
+      background: #1e293b; color: #fff; border: 1px solid var(--border);
+      width: 36px; height: 36px; border-radius: 50%; font-size: 1.1rem;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .lightbox-body {
+      width: 100%; max-width: 700px; height: calc(100vh - 120px); max-height: 650px;
+      background: #fff; border-radius: 12px; overflow: hidden; display: flex;
+      align-items: center; justify-content: center; position: relative; border: 2px solid var(--border);
+    }
+    .lightbox-body img { width: 100%; height: 100%; object-fit: contain; }
 
     /* Modal for PDF 2x2 Field Selection */
     .modal-overlay {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(9, 14, 26, 0.85); backdrop-filter: blur(4px); z-index: 10000;
-      align-items: center; justify-content: center;
+      align-items: center; justify-content: center; padding: 14px;
     }
     .modal-overlay.active { display: flex; }
     .modal-box {
       background: #131c2e; border: 1px solid var(--border); border-radius: 12px;
-      padding: 24px; max-width: 440px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+      padding: 22px; max-width: 440px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.6);
     }
-    .modal-box h3 { margin: 0 0 8px 0; color: var(--primary); font-size: 1.25rem; }
-    .modal-box p { margin: 0 0 16px 0; color: var(--text-muted); font-size: 0.85rem; }
-    .field-options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+    .modal-box h3 { margin: 0 0 6px 0; color: var(--primary); font-size: 1.2rem; }
+    .modal-box p { margin: 0 0 14px 0; color: var(--text-muted); font-size: 0.82rem; }
+    .field-options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px; }
     .field-option-label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #fff; cursor: pointer; }
     .field-option-label input { accent-color: var(--primary); cursor: pointer; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
-    .btn-cancel { background: #334155; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; }
-    .btn-generate { background: #2563eb; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 700; }
+    .btn-cancel { background: #334155; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+    .btn-generate { background: #2563eb; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.85rem; }
+
+    /* Mobile Responsive Rules (Adaptive 1-column layout like South1) */
+    @media (max-width: 768px) {
+      body { padding: 10px 8px 30px 8px; }
+      .header h2 { font-size: 1.35rem; }
+      .card { padding: 16px; min-height: auto; }
+      .product-content { flex-direction: column; align-items: center; gap: 14px; margin-top: 6px; }
+      
+      .product-img-wrapper {
+        width: 100%; max-width: 340px; height: auto;
+        aspect-ratio: 1 / 1; min-width: 0; border-radius: 10px;
+      }
+      
+      .product-info-right { text-align: center; align-items: center; width: 100%; }
+      .variant-header { font-size: 1.6rem; }
+      .lot-label { font-size: 1.05rem; margin-bottom: 6px; }
+      .weight-highlight { font-size: 1.95rem; padding: 4px 12px; margin: 4px 0 10px 0; }
+      .weight-unit { font-size: 0.95rem; }
+      .neutral-row { font-size: 0.92rem; }
+      
+      .status-bar { font-size: 0.8rem; padding: 8px 12px; }
+      #scanInput { font-size: 1.05rem; padding: 11px; }
+
+      .history h4 { flex-direction: column; align-items: stretch; gap: 10px; }
+      .btn-group { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+      .action-btn { width: 100%; text-align: center; padding: 10px 6px; font-size: 0.82rem; }
+
+      .lightbox-body { height: calc(100vh - 160px); }
+      .field-options-grid { grid-template-columns: 1fr; gap: 6px; }
+    }
 
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
   </style>
@@ -173,18 +235,19 @@
     <div id="statusText" class="status-text" style="color: #94a3b8;">Ready for Tag</div>
 
     <div id="productContent" class="product-content" style="display: none;">
-      <!-- Product Image with Loader and Fallback -->
-      <div class="product-img-wrapper">
+      <!-- Product Image with Loader, Tap to Zoom, and Fallback -->
+      <div class="product-img-wrapper" onclick="openLightbox()" title="Tap to zoom">
         <div class="img-loader" id="imgLoader"><div class="spinner"></div><span>Loading image...</span></div>
         <img id="productImg" class="product-img" src="" alt="Product Large Image" onload="handleImageSuccess()" onerror="handleImageError()">
         <div id="imgFallback" class="img-fallback">
-          <div style="font-size: 2.5rem; margin-bottom: 6px;">🖼️</div>
+          <div style="font-size: 2.2rem; margin-bottom: 6px;">🖼️</div>
           <div style="font-weight: 700; color: #334155;">No Catalog Image Found</div>
           <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px;" id="fallbackDesignTag">Design: -</div>
         </div>
+        <div class="zoom-hint">🔍 Tap to Zoom</div>
       </div>
       
-      <!-- Details on the Right -->
+      <!-- Details on the Right (Stacks Below Image on Mobile) -->
       <div class="product-info-right">
         <div id="dispVariant" class="variant-header">---</div>
         <div class="lot-label">Lot No: <span id="dispLot">---</span></div>
@@ -196,7 +259,7 @@
       </div>
     </div>
 
-    <div id="idleDetails" class="details" style="text-align: center; color: #94a3b8; margin-top: 20px;">Pull trigger on scanner gun to inspect product</div>
+    <div id="idleDetails" class="details" style="text-align: center; color: #94a3b8; margin-top: 20px;">Pull trigger on scanner gun or enter barcode to inspect</div>
     <div id="rawDisplay" class="raw-code"></div>
   </div>
 
@@ -208,24 +271,37 @@
         <button class="action-btn pdf-btn" onclick="openPDFModal()">📄 Download 2x2 PDF</button>
       </div>
     </h4>
-    <table class="history-table">
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Variant</th>
-          <th>Lot No</th>
-          <th>Weight</th>
-          <th>Category</th>
-          <th>Group</th>
-          <th>STN No</th>
-        </tr>
-      </thead>
-      <tbody id="historyBody">
-        <tr>
-          <td colspan="7" style="text-align:center; color:#64748b; padding:18px;">No items scanned yet</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="table-container">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Variant</th>
+            <th>Lot No</th>
+            <th>Weight</th>
+            <th>Category</th>
+            <th>Group</th>
+            <th>STN No</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr>
+            <td colspan="7" style="text-align:center; color:#64748b; padding:18px;">No items scanned yet</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Floating Lightbox Modal for Mobile/PC Zoom -->
+  <div class="lightbox-modal" id="lightboxModal" onclick="if(event.target.id === 'lightboxModal') closeLightbox()">
+    <div class="lightbox-header">
+      <span class="lightbox-badge" id="modalDesignBadge">---</span>
+      <button class="lightbox-close-btn" onclick="closeLightbox()">✕</button>
+    </div>
+    <div class="lightbox-body">
+      <img id="modalImg" src="" alt="Enlarged View">
+    </div>
   </div>
 
   <!-- PDF 2x2 Layout Options Modal -->
@@ -286,13 +362,16 @@
     const scanInput = document.getElementById('scanInput');
     let scanTimeout;
 
-    // Maintain auto-focus for continuous barcode scans
+    // Mobile / Desktop soft focus maintainer
     scanInput.addEventListener('blur', () => {
       setTimeout(() => {
-        if (document.activeElement.id !== 'excelInput' && !document.getElementById('pdfModal').classList.contains('active')) {
+        const isInteracting = document.activeElement.id === 'excelInput' || 
+                              document.getElementById('pdfModal').classList.contains('active') ||
+                              document.getElementById('lightboxModal').classList.contains('active');
+        if (!isInteracting) {
           scanInput.focus();
         }
-      }, 10);
+      }, 150);
     });
 
     // Handle excel upload from the Pending sheet
@@ -308,7 +387,7 @@
         pendingSheetName = uploadedWorkbook.SheetNames.find(n => n.trim().toLowerCase() === 'pending') || uploadedWorkbook.SheetNames[0];
         const sheet = uploadedWorkbook.Sheets[pendingSheetName];
         
-        // Find column index for 'Scanned' in header row (Row 0 in 0-indexed coords)
+        // Find column index for 'Scanned' in header row
         const range = XLSX.utils.decode_range(sheet['!ref']);
         scannedColIndex = -1;
         for (let C = range.s.c; C <= range.e.c; ++C) {
@@ -319,7 +398,6 @@
             break;
           }
         }
-        // If not found, use next column after header
         if (scannedColIndex === -1) {
           scannedColIndex = range.e.c + 1;
           const headerCell = XLSX.utils.encode_cell({ r: range.s.r, c: scannedColIndex });
@@ -336,7 +414,7 @@
         scannedRowIndices.clear();
         
         rows.forEach((r, idx) => {
-          const rowIndex = idx + 1; // Row 1 is header, so data begins at Row 2 (0-indexed: idx + 1)
+          const rowIndex = idx + 1;
           
           const getVal = (keys) => {
             for (const k of keys) {
@@ -384,7 +462,7 @@
       reader.readAsArrayBuffer(file);
     });
 
-    // Barcode scanner keydown listener: prevents premature cut-off between Variant & Lot
+    // Scanner Gun Keydown logic
     scanInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault(); 
@@ -417,7 +495,6 @@
 
       rawDisplay.innerText = `Full Scanned Code: ${rawText}`;
 
-      // Check against Merge or Lot Number
       const item = DB[extractedKey] || LotDB[extractedKey];
 
       if (item) {
@@ -448,7 +525,6 @@
         productContent.style.display = 'flex';
         idleDetails.style.display = 'none';
 
-        // Mark as scanned
         scannedRowIndices.add(item.rowIndex);
 
         if (!scannedItems.some(x => x.key === item.merge)) {
@@ -505,6 +581,27 @@
       document.getElementById('fallbackDesignTag').innerText = `Design: ${dCode || 'N/A'}`;
     }
 
+    // Lightbox modal operations
+    function openLightbox() {
+      if (!currentMatchedItem) return;
+      const dCode = (currentMatchedItem.v && currentMatchedItem.v.length >= 9) ? currentMatchedItem.v.slice(2, 9).toUpperCase() : currentMatchedItem.v.toUpperCase();
+      document.getElementById('modalDesignBadge').innerText = dCode;
+      document.getElementById('modalImg').src = document.getElementById('productImg').src;
+      document.getElementById('lightboxModal').classList.add('active');
+    }
+
+    function closeLightbox() {
+      document.getElementById('lightboxModal').classList.remove('active');
+      scanInput.focus();
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeLightbox();
+        closePDFModal();
+      }
+    });
+
     function updateHistoryUI() {
       const tbody = document.getElementById('historyBody');
       if (scannedItems.length === 0) {
@@ -524,8 +621,7 @@
       `).join('');
     }
 
-    // Export Excel: Preserves all 100+ original rows from the uploaded file,
-    // only setting Scanned = 'Yes' for the scanned ones and 'No' for the rest.
+    // Export Excel preserving original rows and updating Scanned column
     function exportExcel() {
       if (!uploadedWorkbook) {
         return alert('Please upload your Excel file first!');
@@ -534,7 +630,6 @@
       const sheet = uploadedWorkbook.Sheets[pendingSheetName];
       const range = XLSX.utils.decode_range(sheet['!ref']);
 
-      // Iterate through all data rows (starting row 1 after header row 0)
       for (let R = range.s.r + 1; R <= range.e.r; ++R) {
         const cellAddress = XLSX.utils.encode_cell({ r: R, c: scannedColIndex });
         const isScanned = scannedRowIndices.has(R);
@@ -557,7 +652,6 @@
       scanInput.focus();
     }
 
-    // Helper: Convert Image to Base64
     async function getBase64Image(url) {
       try {
         const response = await fetch(url);
@@ -574,7 +668,7 @@
       }
     }
 
-    // 2x2 Grid PDF Generator (Matching South1 Layout)
+    // 2x2 Grid PDF Generator matching South1 layout
     async function generate2x2PDF() {
       const btn = document.getElementById('generatePdfBtn');
       btn.innerText = "⏳ Building PDF...";
@@ -592,7 +686,6 @@
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('portrait', 'pt', 'a4');
 
-        // Card Grid Dimensions
         const cardWidth = 265;
         const cardHeight = 370;
         const startX = 22;
@@ -600,14 +693,12 @@
         const gapX = 20;
         const gapY = 25;
 
-        // Preload all verified images
         const base64Images = await Promise.all(scannedItems.map(item => getBase64Image(item.imgUrl)));
 
         for (let i = 0; i < scannedItems.length; i++) {
           const item = scannedItems[i];
           const imgBase64 = base64Images[i];
 
-          // Add a new page every 4 items (2x2 grid)
           if (i > 0 && i % 4 === 0) {
             doc.addPage();
           }
