@@ -24,7 +24,7 @@
     }
 
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
-    body { background: var(--bg); color: var(--text); margin: 0; padding: 16px 14px 40px 14px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    body { background: var(--bg); color: var(--text); margin: 0; padding: 16px 14px 80px 14px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
     
     .header { width: 100%; max-width: 850px; text-align: center; margin-bottom: 12px; }
     .header h2 { margin: 0 0 4px 0; font-size: 1.55rem; color: var(--primary); }
@@ -73,6 +73,42 @@
       white-space: nowrap;
     }
     .btn-camera-trigger:hover { background: #0369a1; }
+
+    /* Floating Thumb-Friendly Mobile Scan Bar */
+    .mobile-floating-bar {
+      display: none;
+      position: fixed;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 24px);
+      max-width: 440px;
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--primary);
+      padding: 8px 12px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+      z-index: 1000;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-floating-camera {
+      flex: 1;
+      background: #0284c7;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
 
     /* CAMERA SCANNER MODAL (Matching NAP POS Camera Design) */
     .camera-modal-overlay {
@@ -312,7 +348,7 @@
 
     /* Mobile Responsive Rules */
     @media (max-width: 768px) {
-      body { padding: 10px 8px 30px 8px; }
+      body { padding: 10px 10px 85px 10px; }
       .header h2 { font-size: 1.35rem; }
       .card { padding: 16px; min-height: auto; }
       .product-content { flex-direction: column; align-items: center; gap: 14px; margin-top: 6px; }
@@ -339,6 +375,9 @@
 
       .lightbox-body { height: calc(100vh - 160px); }
       .field-options-grid { grid-template-columns: 1fr; gap: 6px; }
+
+      /* Show Floating Mobile Bottom Action Bar */
+      .mobile-floating-bar { display: flex; }
     }
 
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
@@ -365,7 +404,7 @@
   </div>
 
   <div class="scan-controls-container">
-    <input type="text" id="scanInput" placeholder="Scan tag or type here..." autofocus autocomplete="off" />
+    <input type="text" id="scanInput" placeholder="Scan tag or type here..." autocomplete="off" />
     <button class="btn-camera-trigger" id="openCameraBtn" onclick="startMobileCamera()">📷 Camera</button>
   </div>
 
@@ -429,6 +468,11 @@
         </tbody>
       </table>
     </div>
+  </div>
+
+  <!-- Mobile Floating Quick-Scan Bar -->
+  <div class="mobile-floating-bar" id="mobileFloatingBar">
+    <button class="btn-floating-camera" onclick="startMobileCamera()">📷 Scan Next Tag</button>
   </div>
 
   <!-- Mobile Camera Scanner Viewport -->
@@ -528,22 +572,29 @@
     const scanInput = document.getElementById('scanInput');
     let scanTimeout;
 
-    // Mobile Camera State
+    // Detect if user is on mobile/touch device
+    const isMobileDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || window.innerWidth <= 768;
+
+    // Camera State
     let html5QrScanner = null;
     let cameraTrack = null;
     let isTorchOn = false;
 
-    scanInput.addEventListener('blur', () => {
-      setTimeout(() => {
-        const isInteracting = document.activeElement.id === 'excelInput' || 
-                              document.getElementById('pdfModal').classList.contains('active') ||
-                              document.getElementById('cameraModal').classList.contains('active') ||
-                              document.getElementById('lightboxModal').classList.contains('active');
-        if (!isInteracting) {
-          scanInput.focus();
-        }
-      }, 150);
-    });
+    // Only maintain aggressive auto-focus on PC (prevents virtual keyboard popup on mobile)
+    if (!isMobileDevice) {
+      scanInput.focus();
+      scanInput.addEventListener('blur', () => {
+        setTimeout(() => {
+          const isInteracting = document.activeElement.id === 'excelInput' || 
+                                document.getElementById('pdfModal').classList.contains('active') ||
+                                document.getElementById('cameraModal').classList.contains('active') ||
+                                document.getElementById('lightboxModal').classList.contains('active');
+          if (!isInteracting) {
+            scanInput.focus();
+          }
+        }, 150);
+      });
+    }
 
     window.addEventListener('DOMContentLoaded', () => {
       fetchAutoFile('Product_receipt.xlsx');
@@ -649,10 +700,9 @@
       document.getElementById('dbCount').innerText = Object.keys(DB).length;
       document.getElementById('scanCount').innerText = 0;
       updateHistoryUI();
-      scanInput.focus();
+      if (!isMobileDevice) scanInput.focus();
     }
 
-    // Hardware Scanner Gun Input logic (No prefix, gun sends raw merge or variant+tab+lot)
     scanInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault(); 
@@ -664,37 +714,30 @@
       scanTimeout = setTimeout(function() {
         const val = scanInput.value.replace(/[\r\n\t\s]/g, '').trim();
         if (val.length > 0) {
-          processCode(val, false); // isCamera = false
+          processCode(val, false);
           scanInput.value = ""; 
         }
       }, 150); 
     });
 
-    // LOOKUP & PREFIX STRIPPING LOGIC
-    // isCamera = true will strip the 7-character tag header prefix while preserving the full dynamic lotno
     function findMatchingItem(rawText, isCamera = false) {
       let clean = rawText.toUpperCase().replace(/[\r\n\t\s]/g, '');
 
-      // 1. Direct match first (for regular scanner gun or manual entry)
       if (DB[clean]) return DB[clean];
 
-      // 2. If scanned from mobile camera and has the 7-character header prefix:
-      // Strip exactly the first 7 characters (e.g. H1FDMAI) to leave the 14-digit variant + dynamic lot number
+      // If from camera, strip first 7 chars (e.g. H1FDMAI) to preserve full variant + conversion piece lotno
       if (isCamera && clean.length > 14) {
-        const stripped = clean.substring(7); // Drops the first 7 chars
+        const stripped = clean.substring(7);
         if (DB[stripped]) return DB[stripped];
       }
 
-      // 3. Fallback: Check if clean text without first 7 chars exists in DB
       if (clean.length > 21) {
         const strippedFallback = clean.substring(7);
         if (DB[strippedFallback]) return DB[strippedFallback];
       }
 
-      // 4. Fallback search by Lot Number
       if (LotDB[clean]) return LotDB[clean];
-      
-      // 5. Look for any Merge key contained in the scanned string
+
       for (const mergeKey in DB) {
         if (clean.includes(mergeKey)) {
           return DB[mergeKey];
@@ -705,6 +748,12 @@
     }
 
     function processCode(rawText, isCamera = false) {
+      // Prevent on-screen keyboard from popping up on mobile
+      if (isMobileDevice) {
+        scanInput.blur();
+        if (document.activeElement) document.activeElement.blur();
+      }
+
       const card = document.getElementById('resultCard');
       const statusText = document.getElementById('statusText');
       const productContent = document.getElementById('productContent');
@@ -724,6 +773,11 @@
         statusText.innerText = "MATCH FOUND";
         statusText.style.color = "#34d399";
         
+        // Haptic feedback (gentle vibration on mobile device)
+        if (navigator.vibrate) {
+          navigator.vibrate([40, 50, 40]);
+        }
+
         document.getElementById('dispVariant').innerText = item.v || '---';
         document.getElementById('dispLot').innerText = item.l || '-';
         document.getElementById('dispWeight').innerText = parseFloat(item.w || 0).toFixed(3);
@@ -765,6 +819,11 @@
           document.getElementById('scanCount').innerText = scannedItems.length;
           updateHistoryUI();
         }
+
+        // Smooth scroll to display card on mobile
+        if (isMobileDevice) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
       } else {
         currentMatchedItem = null;
         card.className = "card not-found";
@@ -777,8 +836,12 @@
       }
     }
 
-    /* MOBILE CAMERA ENGINE WITH AUTOFOCUS & TORCH */
+    /* MOBILE CAMERA ENGINE */
     async function startMobileCamera() {
+      // Dismiss keyboard immediately
+      if (document.activeElement) document.activeElement.blur();
+      scanInput.blur();
+
       const modal = document.getElementById('cameraModal');
       modal.classList.add('active');
 
@@ -806,7 +869,7 @@
           config,
           (decodedText) => {
             if (decodedText) {
-              processCode(decodedText, true); // isCamera = true (strips the 7-digit header)
+              processCode(decodedText, true);
               stopMobileCamera();
             }
           },
@@ -823,7 +886,7 @@
 
       } catch (err) {
         console.error("Camera start failed:", err);
-        alert("Camera error: Ensure camera permission is allowed and site is served over HTTPS or localhost.");
+        alert("Camera error: Ensure camera permission is allowed and site is served over HTTPS.");
         stopMobileCamera();
       }
     }
@@ -834,10 +897,11 @@
           document.getElementById('cameraModal').classList.remove('active');
           cameraTrack = null;
           isTorchOn = false;
-          scanInput.focus();
+          // Only refocus on desktop
+          if (!isMobileDevice) scanInput.focus();
         }).catch(() => {
           document.getElementById('cameraModal').classList.remove('active');
-          scanInput.focus();
+          if (!isMobileDevice) scanInput.focus();
         });
       } else {
         document.getElementById('cameraModal').classList.remove('active');
@@ -863,7 +927,7 @@
           });
           document.getElementById('torchToggleBtn').innerText = isTorchOn ? "💡 Torch ON" : "🔦 Torch";
         } else {
-          alert("Flashlight / Torch not supported on this device's camera.");
+          alert("Flashlight / Torch not supported on this camera.");
         }
       } catch (e) {
         console.warn("Torch failed:", e);
@@ -903,7 +967,7 @@
 
     function closeLightbox() {
       document.getElementById('lightboxModal').classList.remove('active');
-      scanInput.focus();
+      if (!isMobileDevice) scanInput.focus();
     }
 
     window.addEventListener('keydown', (e) => {
@@ -957,7 +1021,7 @@
 
     function closePDFModal() {
       document.getElementById('pdfModal').classList.remove('active');
-      scanInput.focus();
+      if (!isMobileDevice) scanInput.focus();
     }
 
     async function getBase64Image(url) {
