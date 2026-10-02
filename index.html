@@ -3,25 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <title>PC Barcode Inwarding Scanner</title>
+  <!-- Excel Parser -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- jsPDF & AutoTable for PDF Generation -->
+  <!-- jsPDF for 2x2 Grid Catalogue PDF Generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.3/dist/jspdf.plugin.autotable.min.js"></script>
 
   <style>
+    :root {
+      --bg: #0b1329;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --primary: #38bdf8;
+      --accent: #10b981;
+      --danger: #ef4444;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: #0b1329; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+    body { background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
     
     .header { width: 100%; max-width: 850px; text-align: center; margin-bottom: 12px; }
-    .header h2 { margin: 0 0 4px 0; font-size: 1.6rem; color: #38bdf8; }
-    .header p { margin: 0; font-size: 0.85rem; color: #94a3b8; }
+    .header h2 { margin: 0 0 4px 0; font-size: 1.6rem; color: var(--primary); }
+    .header p { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
 
-    .file-box { width: 100%; max-width: 850px; background: #1e293b; padding: 12px; border-radius: 8px; border: 1px dashed #38bdf8; text-align: center; margin-bottom: 12px; }
-    .file-box label { font-size: 0.9rem; color: #38bdf8; cursor: pointer; display: block; font-weight: 600; }
+    .file-box { width: 100%; max-width: 850px; background: var(--card-bg); padding: 12px; border-radius: 8px; border: 1px dashed var(--primary); text-align: center; margin-bottom: 12px; }
+    .file-box label { font-size: 0.9rem; color: var(--primary); cursor: pointer; display: block; font-weight: 600; }
     .file-box input { display: none; }
 
-    .status-bar { width: 100%; max-width: 850px; display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 10px 18px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 12px; font-size: 0.9rem; }
-    .pulse-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #10b981; margin-right: 8px; animation: blink 1.2s infinite; }
+    .status-bar { width: 100%; max-width: 850px; display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 10px 18px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 12px; font-size: 0.9rem; }
+    .pulse-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); margin-right: 8px; animation: blink 1.2s infinite; }
 
     #scanInput {
       width: 100%;
@@ -30,9 +41,9 @@
       margin-bottom: 14px;
       font-size: 1.2rem;
       font-weight: 700;
-      color: #38bdf8;
+      color: var(--primary);
       background: #111c38;
-      border: 2px solid #38bdf8;
+      border: 2px solid var(--primary);
       border-radius: 8px;
       text-align: center;
       outline: none;
@@ -40,53 +51,69 @@
     }
     #scanInput::placeholder { color: #475569; font-weight: normal; font-size: 1rem; }
 
-    .card { width: 100%; max-width: 850px; border-radius: 12px; padding: 24px; text-align: center; min-height: 420px; display: flex; flex-direction: column; justify-content: center; }
-    .card.idle { background: #1e293b; border: 2px solid #475569; }
-    .card.found { background: #064e3b; border: 3px solid #10b981; }
-    .card.not-found { background: #7f1d1d; border: 3px solid #ef4444; }
+    .card { width: 100%; max-width: 850px; border-radius: 12px; padding: 24px; text-align: center; min-height: 440px; display: flex; flex-direction: column; justify-content: center; }
+    .card.idle { background: var(--card-bg); border: 2px solid #475569; }
+    .card.found { background: #064e3b; border: 3px solid var(--accent); }
+    .card.not-found { background: #7f1d1d; border: 3px solid var(--danger); }
     
     .status-text { font-size: 1.1rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
 
     .product-content { display: flex; align-items: stretch; justify-content: flex-start; gap: 24px; margin-top: 10px; width: 100%; }
     
+    /* Product image box with animated loader & fallback */
     .product-img-wrapper { 
       width: 450px; height: 450px; min-width: 450px; 
       border-radius: 12px; overflow: hidden; background: #fff; 
-      border: 3px solid #334155; display: flex; align-items: center; justify-content: center;
+      border: 3px solid var(--border); display: flex; align-items: center; justify-content: center;
+      position: relative;
     }
     .product-img { width: 100%; height: 100%; object-fit: contain; display: block; }
-    .no-img-text { font-size: 0.85rem; color: #94a3b8; text-align: center; padding: 12px; }
+    
+    .img-loader { 
+      position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; 
+      gap: 10px; color: #0284c7; font-size: 0.85rem; font-weight: 700; background: #ffffff; 
+      width: 100%; height: 100%; z-index: 5; 
+    }
+    .spinner { 
+      width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #0284c7; 
+      border-radius: 50%; animation: spin 0.8s linear infinite; 
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .img-fallback { 
+      color: #64748b; font-size: 0.85rem; text-align: center; display: none; padding: 20px; 
+      flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; background: #ffffff; 
+    }
 
     .product-info-right { flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: left; }
     
-    /* Variant as Header */
-    .req-box { font-size: 2.2rem; font-weight: 800; color: #fff; margin: 0 0 10px 0; line-height: 1.1; font-family: monospace; }
+    /* Display Hierarchy */
+    .variant-header { font-size: 2.1rem; font-weight: 800; color: #fff; margin: 0 0 6px 0; line-height: 1.1; font-family: monospace; }
+    .lot-label { font-size: 1.15rem; color: #cbd5e1; margin-bottom: 12px; font-family: monospace; }
     
-    .details { font-size: 1.15rem; color: #f8fafc; line-height: 1.6; }
-    
-    /* Weight emphasis: bold & standing out */
+    /* Weight emphasis */
     .weight-highlight {
-      font-size: 2.4rem;
+      font-size: 2.3rem;
       font-weight: 900;
-      color: #38bdf8;
+      color: var(--primary);
       background: #0f172a;
       display: inline-block;
       padding: 6px 14px;
       border-radius: 8px;
-      border: 1px solid #38bdf8;
-      margin: 10px 0;
+      border: 1px solid var(--primary);
+      margin: 6px 0 14px 0;
       line-height: 1.1;
     }
-    .weight-unit { font-size: 1.1rem; font-weight: 700; color: #94a3b8; margin-left: 4px; }
+    .weight-unit { font-size: 1.1rem; font-weight: 700; color: var(--text-muted); margin-left: 4px; }
     
-    /* Neutral, plain for others */
-    .neutral-item { color: #94a3b8; font-size: 1rem; font-weight: 400; margin-top: 4px; }
-    .neutral-item span { color: #cbd5e1; }
+    /* Neutral Category & Group */
+    .neutral-row { color: var(--text-muted); font-size: 1rem; font-weight: 400; margin-top: 4px; }
+    .neutral-row span { color: #cbd5e1; }
 
-    .raw-code { font-family: monospace; font-size: 0.85rem; color: #94a3b8; word-break: break-all; margin-top: 14px; }
+    .raw-code { font-family: monospace; font-size: 0.85rem; color: var(--text-muted); word-break: break-all; margin-top: 14px; }
 
     .history { width: 100%; max-width: 850px; margin-top: 20px; }
-    .history h4 { margin: 0 0 10px 0; font-size: 1rem; color: #94a3b8; display: flex; justify-content: space-between; align-items: center; }
+    .history h4 { margin: 0 0 10px 0; font-size: 1rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; }
     
     .btn-group { display: flex; gap: 8px; }
     .action-btn { color: white; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; cursor: pointer; user-select: none; border: none; }
@@ -95,10 +122,30 @@
     .pdf-btn { background: #2563eb; }
     .pdf-btn:hover { background: #1d4ed8; }
 
-    .history-table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 8px; overflow: hidden; font-size: 0.9rem; border: 1px solid #334155; }
-    .history-table th { background: #0f172a; padding: 10px 12px; text-align: left; color: #94a3b8; font-weight: 600; }
-    .history-table td { padding: 9px 12px; border-bottom: 1px solid #334155; }
+    .history-table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 8px; overflow: hidden; font-size: 0.9rem; border: 1px solid var(--border); }
+    .history-table th { background: #0f172a; padding: 10px 12px; text-align: left; color: var(--text-muted); font-weight: 600; }
+    .history-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
     .history-table tr:last-child td { border-bottom: none; }
+
+    /* Modal for PDF 2x2 Field Selection */
+    .modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(9, 14, 26, 0.85); backdrop-filter: blur(4px); z-index: 10000;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+      background: #131c2e; border: 1px solid var(--border); border-radius: 12px;
+      padding: 24px; max-width: 440px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+    }
+    .modal-box h3 { margin: 0 0 8px 0; color: var(--primary); font-size: 1.25rem; }
+    .modal-box p { margin: 0 0 16px 0; color: var(--text-muted); font-size: 0.85rem; }
+    .field-options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+    .field-option-label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #fff; cursor: pointer; }
+    .field-option-label input { accent-color: var(--primary); cursor: pointer; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .btn-cancel { background: #334155; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    .btn-generate { background: #2563eb; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 700; }
 
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
   </style>
@@ -107,7 +154,7 @@
 
   <div class="header">
     <h2>Inwarding — PC Inspection Station</h2>
-    <p>Direct Scan Match • High-Res Verification Image</p>
+    <p>Direct Scan Match • Catalogue Preview • 2x2 PDF Export</p>
   </div>
 
   <div class="file-box">
@@ -126,16 +173,26 @@
     <div id="statusText" class="status-text" style="color: #94a3b8;">Ready for Tag</div>
 
     <div id="productContent" class="product-content" style="display: none;">
-      <!-- Image on the Left -->
+      <!-- Product Image with Loader and Fallback -->
       <div class="product-img-wrapper">
-        <img id="productImg" class="product-img" src="" alt="Product Large Image" onerror="handleImgError()">
-        <div id="noImgText" class="no-img-text" style="display: none;">Image not found on server</div>
+        <div class="img-loader" id="imgLoader"><div class="spinner"></div><span>Loading image...</span></div>
+        <img id="productImg" class="product-img" src="" alt="Product Large Image" onload="handleImageSuccess()" onerror="handleImageError()">
+        <div id="imgFallback" class="img-fallback">
+          <div style="font-size: 2.5rem; margin-bottom: 6px;">🖼️</div>
+          <div style="font-weight: 700; color: #334155;">No Catalog Image Found</div>
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px;" id="fallbackDesignTag">Design: -</div>
+        </div>
       </div>
       
-      <!-- Details on the Right: Variant -> Lotno -> Weight (Bold/Prominent) -> Category -> Group -->
+      <!-- Details on the Right -->
       <div class="product-info-right">
-        <div id="reqDisplay" class="req-box">---</div>
-        <div id="itemDetails" class="details"></div>
+        <div id="dispVariant" class="variant-header">---</div>
+        <div class="lot-label">Lot No: <span id="dispLot">---</span></div>
+        <div>
+          <div class="weight-highlight"><span id="dispWeight">0.000</span><span class="weight-unit">g</span></div>
+        </div>
+        <div class="neutral-row">Category: <span id="dispCat">-</span></div>
+        <div class="neutral-row">Group: <span id="dispGroup">-</span></div>
       </div>
     </div>
 
@@ -148,7 +205,7 @@
       <span>Verified Items Log</span>
       <div class="btn-group">
         <button class="action-btn csv-btn" onclick="exportExcel()">📥 Download Excel</button>
-        <button class="action-btn pdf-btn" id="pdfBtn" onclick="exportPDF()">📄 Download PDF with Images</button>
+        <button class="action-btn pdf-btn" onclick="openPDFModal()">📄 Download 2x2 PDF</button>
       </div>
     </h4>
     <table class="history-table">
@@ -171,28 +228,68 @@
     </table>
   </div>
 
+  <!-- PDF 2x2 Layout Options Modal -->
+  <div class="modal-overlay" id="pdfModal">
+    <div class="modal-box">
+      <h3>Catalogue PDF Settings</h3>
+      <p>Configure fields to display below each product image in the 2x2 layout:</p>
+      
+      <div class="field-options-grid">
+        <label class="field-option-label">
+          <input type="checkbox" id="chkPdfVariant" checked>
+          <span>Variant Code</span>
+        </label>
+        <label class="field-option-label">
+          <input type="checkbox" id="chkPdfLot" checked>
+          <span>Lot Number</span>
+        </label>
+        <label class="field-option-label">
+          <input type="checkbox" id="chkPdfWeight" checked>
+          <span>Weight (g)</span>
+        </label>
+        <label class="field-option-label">
+          <input type="checkbox" id="chkPdfCat" checked>
+          <span>Category</span>
+        </label>
+        <label class="field-option-label">
+          <input type="checkbox" id="chkPdfGroup" checked>
+          <span>Group</span>
+        </label>
+        <label class="field-option-label">
+          <input type="checkbox" id="chkPdfStn" checked>
+          <span>STN Number</span>
+        </label>
+        <label class="field-option-label">
+          <input type="checkbox" id="chkPdfDocket">
+          <span>Docket No</span>
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closePDFModal()">Cancel</button>
+        <button class="btn-generate" id="generatePdfBtn" onclick="generate2x2PDF()">Generate PDF</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let DB = {};
     let LotDB = {};
     let scannedItems = [];
+    let currentMatchedItem = null;
     const scanInput = document.getElementById('scanInput');
     let scanTimeout;
 
-    // Keep focus permanently on the scan input
+    // Maintain auto-focus for continuous barcode scans
     scanInput.addEventListener('blur', () => {
       setTimeout(() => {
-        if (document.activeElement.id !== 'excelInput') {
+        if (document.activeElement.id !== 'excelInput' && !document.getElementById('pdfModal').classList.contains('active')) {
           scanInput.focus();
         }
       }, 10);
     });
 
-    function handleImgError() {
-      document.getElementById('productImg').style.display = 'none';
-      document.getElementById('noImgText').style.display = 'block';
-    }
-
-    // Load specifically from "Pending" sheet
+    // Handle excel upload from the Pending sheet
     document.getElementById('excelInput').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -201,7 +298,6 @@
         const data = new Uint8Array(evt.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
         
-        // Target Pending sheet
         let sheetName = workbook.SheetNames.find(n => n.trim().toLowerCase() === 'pending') || workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
@@ -223,7 +319,6 @@
           const lotno = getVal(['Lotno', 'Lot Number', 'Lot No']);
           let mergeKey = getVal(['Merge', '23 Digit code', '23 DIGIT CODE']);
 
-          // If formula wasn't evaluated or column empty, concatenate variant + lotno
           if (!mergeKey || mergeKey.startsWith('=')) {
             mergeKey = `${variant}${lotno}`;
           }
@@ -243,12 +338,8 @@
             rawRow: r
           };
 
-          if (mergeKey) {
-            DB[mergeKey.toUpperCase()] = itemObj;
-          }
-          if (lotno) {
-            LotDB[lotno.toUpperCase()] = itemObj;
-          }
+          if (mergeKey) DB[mergeKey.toUpperCase()] = itemObj;
+          if (lotno) LotDB[lotno.toUpperCase()] = itemObj;
         });
 
         document.getElementById('dbCount').innerText = Object.keys(DB).length;
@@ -258,31 +349,7 @@
       reader.readAsArrayBuffer(file);
     });
 
-    function playBeep(success) {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        if (success) {
-          osc.frequency.setValueAtTime(880, ctx.currentTime);
-          osc.frequency.setValueAtTime(1200, ctx.currentTime + 0.08);
-          gain.gain.setValueAtTime(0.35, ctx.currentTime);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.2);
-        } else {
-          osc.frequency.setValueAtTime(240, ctx.currentTime);
-          gain.gain.setValueAtTime(0.35, ctx.currentTime);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.3);
-        }
-      } catch(e) {}
-    }
-
-    // ORIGINAL SCANNER LOGIC:
-    // Do NOT clear or submit early on Enter/Tab. Barcode scanners send Tab or Enter between
-    // Variant and Lotno. Suppressing both allows the entire 23 digits to assemble in the input.
+    // Barcode scanner keydown listener: prevents premature cut-off between Variant & Lot
     scanInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault(); 
@@ -293,7 +360,6 @@
       clearTimeout(scanTimeout);
       
       scanTimeout = setTimeout(function() {
-        // Strip any whitespace, tabs, or newlines injected by the scanner hardware
         const val = scanInput.value.replace(/[\r\n\t\s]/g, '').trim();
         if (val.length > 0) {
           processCode(val);
@@ -307,45 +373,42 @@
       
       const card = document.getElementById('resultCard');
       const statusText = document.getElementById('statusText');
-      const reqDisplay = document.getElementById('reqDisplay');
       const productContent = document.getElementById('productContent');
       const productImg = document.getElementById('productImg');
-      const noImgText = document.getElementById('noImgText');
-      const itemDetails = document.getElementById('itemDetails');
+      const imgLoader = document.getElementById('imgLoader');
+      const imgFallback = document.getElementById('imgFallback');
       const idleDetails = document.getElementById('idleDetails');
       const rawDisplay = document.getElementById('rawDisplay');
 
       rawDisplay.innerText = `Full Scanned Code: ${rawText}`;
 
-      // 1. Direct match on Merge (Variant + Lotno)
-      // 2. Fallback match on Lot Number directly if scanner omitted the variant
+      // Check against Merge or Lot Number
       const item = DB[extractedKey] || LotDB[extractedKey];
 
       if (item) {
-        playBeep(true);
+        currentMatchedItem = item;
         card.className = "card found";
         statusText.innerText = "MATCH FOUND";
         statusText.style.color = "#34d399";
         
-        // 1. Variant as header
-        reqDisplay.innerText = item.v || '---';
+        // Show fields in requested order
+        document.getElementById('dispVariant').innerText = item.v || '---';
+        document.getElementById('dispLot').innerText = item.l || '-';
+        document.getElementById('dispWeight').innerText = parseFloat(item.w || 0).toFixed(3);
+        document.getElementById('dispCat').innerText = item.c || '-';
+        document.getElementById('dispGroup').innerText = item.g || '-';
 
+        // High-res Image Loading State
         const imgKey = (item.v && item.v.length >= 9) ? item.v.slice(2, 9).toUpperCase() : item.v.toUpperCase();
         const imgUrl = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${imgKey}.jpg`;
 
+        productImg.style.opacity = '0';
         productImg.style.display = 'block';
-        noImgText.style.display = 'none';
-        productImg.src = imgUrl;
+        imgFallback.style.display = 'none';
+        imgLoader.style.display = 'flex';
 
-        // Details: Lotno -> Weight (Bold/Prominent) -> Category & Group (Neutral)
-        itemDetails.innerHTML = `
-          <div style="color:#cbd5e1; font-family: monospace; font-size: 1.15rem; margin-bottom: 4px;">Lot No: ${item.l || '-'}</div>
-          <div>
-            <div class="weight-highlight">${parseFloat(item.w || 0).toFixed(3)}<span class="weight-unit">g</span></div>
-          </div>
-          <div class="neutral-item">Category: <span>${item.c || '-'}</span></div>
-          <div class="neutral-item">Group: <span>${item.g || '-'}</span></div>
-        `;
+        productImg.dataset.retried = "0";
+        productImg.src = imgUrl;
 
         productContent.style.display = 'flex';
         idleDetails.style.display = 'none';
@@ -370,17 +433,38 @@
           updateHistoryUI();
         }
       } else {
-        playBeep(false);
+        currentMatchedItem = null;
         card.className = "card not-found";
         statusText.innerText = "NOT IN PENDING LIST";
         statusText.style.color = "#f87171";
-        
-        reqDisplay.innerText = "NO MATCH";
 
         productContent.style.display = 'none';
         idleDetails.style.display = 'block';
         idleDetails.innerText = Object.keys(DB).length === 0 ? "Please upload your Excel file first using the box above!" : "This product does not match any record in the sheet.";
       }
+    }
+
+    function handleImageSuccess() {
+      document.getElementById('imgLoader').style.display = 'none';
+      document.getElementById('productImg').style.opacity = '1';
+    }
+
+    function handleImageError() {
+      const img = document.getElementById('productImg');
+      if (!currentMatchedItem) return;
+      const dCode = (currentMatchedItem.v && currentMatchedItem.v.length >= 9) ? currentMatchedItem.v.slice(2, 9).toUpperCase() : currentMatchedItem.v.toUpperCase();
+
+      if (img.dataset.retried === "0") {
+        img.dataset.retried = "1";
+        img.src = `https://jewbridge.titanjew.in/CatalogImages/api/ImageFetch/?Type=ProductImages&ImageName=${dCode}.JPG`;
+        return;
+      }
+
+      document.getElementById('imgLoader').style.display = 'none';
+      img.style.display = 'none';
+      const fallback = document.getElementById('imgFallback');
+      fallback.style.display = 'flex';
+      document.getElementById('fallbackDesignTag').innerText = `Design: ${dCode || 'N/A'}`;
     }
 
     function updateHistoryUI() {
@@ -402,7 +486,6 @@
       `).join('');
     }
 
-    // Export Excel formatted with original headers and column order
     function exportExcel() {
       if (scannedItems.length === 0) return alert('No items verified yet!');
       
@@ -429,7 +512,18 @@
       XLSX.writeFile(wb, `Inwarded_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
 
-    // Helper to fetch images as Base64 for the PDF
+    // Modal controls for 2x2 PDF
+    function openPDFModal() {
+      if (scannedItems.length === 0) return alert('No items verified yet!');
+      document.getElementById('pdfModal').classList.add('active');
+    }
+
+    function closePDFModal() {
+      document.getElementById('pdfModal').classList.remove('active');
+      scanInput.focus();
+    }
+
+    // Helper: Convert Image to Base64
     async function getBase64Image(url) {
       try {
         const response = await fetch(url);
@@ -446,73 +540,132 @@
       }
     }
 
-    // Export PDF with high-res product images
-    async function exportPDF() {
-      if (scannedItems.length === 0) return alert('No items verified yet!');
-
-      const btn = document.getElementById('pdfBtn');
-      const originalText = btn.innerText;
-      btn.innerText = "⏳ Generating PDF...";
+    // 2x2 Grid PDF Generator (Matching South1 Layout)
+    async function generate2x2PDF() {
+      const btn = document.getElementById('generatePdfBtn');
+      btn.innerText = "⏳ Building PDF...";
       btn.disabled = true;
+
+      const incVariant = document.getElementById('chkPdfVariant').checked;
+      const incLot = document.getElementById('chkPdfLot').checked;
+      const incWeight = document.getElementById('chkPdfWeight').checked;
+      const incCat = document.getElementById('chkPdfCat').checked;
+      const incGroup = document.getElementById('chkPdfGroup').checked;
+      const incStn = document.getElementById('chkPdfStn').checked;
+      const incDocket = document.getElementById('chkPdfDocket').checked;
 
       try {
         const { jsPDF } = window.jspdf;
+        // Standard A4 dimensions in points: 595.28 x 841.89
         const doc = new jsPDF('portrait', 'pt', 'a4');
+        const pageWidth = 595.28;
+        const pageHeight = 841.89;
 
-        doc.setFontSize(16);
-        doc.setTextColor(30, 41, 59);
-        doc.text("Inwarding Verification Report", 40, 40);
+        // Card Grid Dimensions
+        const cardWidth = 265;
+        const cardHeight = 370;
+        const startX = 22;
+        const startY = 40;
+        const gapX = 20;
+        const gapY = 25;
 
-        doc.setFontSize(9);
-        doc.setTextColor(100);
-        doc.text(`Generated: ${new Date().toLocaleString()} | Verified Items: ${scannedItems.length}`, 40, 56);
+        // Preload all verified images
+        const base64Images = await Promise.all(scannedItems.map(item => getBase64Image(item.imgUrl)));
 
-        // Preload images as base64
-        const imageBase64List = await Promise.all(
-          scannedItems.map(item => getBase64Image(item.imgUrl))
-        );
+        for (let i = 0; i < scannedItems.length; i++) {
+          const item = scannedItems[i];
+          const imgBase64 = base64Images[i];
 
-        const tableBody = scannedItems.map((item, idx) => [
-          idx + 1,
-          "", // Cell placeholder for image
-          item.variant,
-          item.lotno,
-          `${parseFloat(item.wt || 0).toFixed(3)}g`,
-          item.cat,
-          item.grp,
-          item.stn
-        ]);
-
-        doc.autoTable({
-          head: [['#', 'Image', 'Variant', 'Lot No', 'Weight', 'Category', 'Group', 'STN']],
-          body: tableBody,
-          startY: 70,
-          theme: 'grid',
-          styles: { fontSize: 8, valign: 'middle', halign: 'left' },
-          headStyles: { fillColor: [11, 19, 41], textColor: [255, 255, 255], fontStyle: 'bold' },
-          columnStyles: {
-            0: { cellWidth: 20 },
-            1: { cellWidth: 46, minCellHeight: 46 },
-            4: { fontStyle: 'bold' }
-          },
-          didDrawCell: function (data) {
-            if (data.column.index === 1 && data.cell.section === 'body') {
-              const base64 = imageBase64List[data.row.index];
-              if (base64) {
-                doc.addImage(base64, 'JPEG', data.cell.x + 3, data.cell.y + 3, 40, 40);
-              }
-            }
+          // Add a new page every 4 items (2x2 grid)
+          if (i > 0 && i % 4 === 0) {
+            doc.addPage();
           }
-        });
 
-        doc.save(`Inwarding_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+          const posInPage = i % 4;
+          const col = posInPage % 2;
+          const row = Math.floor(posInPage / 2);
+
+          const x = startX + col * (cardWidth + gapX);
+          const y = startY + row * (cardHeight + gapY);
+
+          // Card Background & Border
+          doc.setFillColor(255, 255, 255);
+          doc.setDrawColor(220, 226, 235);
+          doc.roundedRect(x, y, cardWidth, cardHeight, 6, 6, 'FD');
+
+          // Centered Product Image Box
+          const imgBoxW = cardWidth - 20;
+          const imgBoxH = 220;
+          const imgX = x + 10;
+          const imgY = y + 10;
+
+          if (imgBase64) {
+            doc.addImage(imgBase64, 'JPEG', imgX, imgY, imgBoxW, imgBoxH, undefined, 'FAST');
+          } else {
+            doc.setFillColor(248, 250, 252);
+            doc.rect(imgX, imgY, imgBoxW, imgBoxH, 'F');
+            doc.setFontSize(10);
+            doc.setTextColor(148, 163, 184);
+            doc.text("Image not available", imgX + imgBoxW / 2, imgY + imgBoxH / 2, { align: 'center' });
+          }
+
+          // Card Metadata
+          let textY = y + 245;
+
+          if (incVariant) {
+            doc.setFontSize(11);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(2, 132, 199);
+            doc.text(item.variant || '---', x + 12, textY);
+            textY += 16;
+          }
+
+          doc.setFontSize(9);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(51, 65, 85);
+
+          if (incLot) {
+            doc.text(`Lot No: ${item.lotno || '-'}`, x + 12, textY);
+            textY += 14;
+          }
+
+          if (incWeight) {
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(15, 23, 42);
+            doc.text(`Weight: ${parseFloat(item.wt || 0).toFixed(3)} g`, x + 12, textY);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(51, 65, 85);
+            textY += 14;
+          }
+
+          if (incCat) {
+            doc.text(`Category: ${item.cat || '-'}`, x + 12, textY);
+            textY += 14;
+          }
+
+          if (incGroup) {
+            doc.text(`Group: ${item.grp || '-'}`, x + 12, textY);
+            textY += 14;
+          }
+
+          if (incStn) {
+            doc.text(`STN: ${item.stn || '-'}`, x + 12, textY);
+            textY += 14;
+          }
+
+          if (incDocket && item.docket) {
+            doc.text(`Docket: ${item.docket}`, x + 12, textY);
+          }
+        }
+
+        doc.save(`Inwarding_Catalogue_2x2_${new Date().toISOString().slice(0, 10)}.pdf`);
+        closePDFModal();
       } catch (err) {
         console.error(err);
-        alert("Failed to generate PDF. Check browser console.");
+        alert("Failed to build 2x2 PDF. Check browser console.");
       } finally {
-        btn.innerText = originalText;
+        btn.innerText = "Generate PDF";
         btn.disabled = false;
-        scanInput.focus();
       }
     }
   </script>
