@@ -102,7 +102,6 @@
     #cameraReaderView { width: 100%; min-height: 280px; background: #000; }
     #cameraReaderView video { object-fit: cover !important; border-radius: 12px; }
 
-    /* The Nap-style Reticle Overlay */
     .scanner-reticle-overlay {
       position: absolute;
       top: 0; left: 0; width: 100%; height: 100%;
@@ -135,7 +134,6 @@
       padding-bottom: 6px;
     }
 
-    /* Green Corner Brackets */
     .target-slot::before, .target-slot::after {
       content: ""; position: absolute; width: 22px; height: 22px; border-color: #22c55e; border-style: solid;
     }
@@ -366,7 +364,6 @@
     <div>Database: <b id="dbCount">0</b> items | Checked: <b id="scanCount">0</b></div>
   </div>
 
-  <!-- Dual Input: Scanner Gun Box + Tap to Open Camera -->
   <div class="scan-controls-container">
     <input type="text" id="scanInput" placeholder="Scan tag or type here..." autofocus autocomplete="off" />
     <button class="btn-camera-trigger" id="openCameraBtn" onclick="startMobileCamera()">📷 Camera</button>
@@ -434,12 +431,11 @@
     </div>
   </div>
 
-  <!-- Mobile Camera Scanner Viewport (Matching POS/NAP UI) -->
+  <!-- Mobile Camera Scanner Viewport -->
   <div class="camera-modal-overlay" id="cameraModal">
     <div class="scanner-viewport-box">
       <div id="cameraReaderView" onclick="triggerCameraRefocus()"></div>
       
-      <!-- Reticle and Guides -->
       <div class="scanner-reticle-overlay">
         <div class="reticle-tip" onclick="triggerCameraRefocus()">Blurry? Tap the video to refocus</div>
         
@@ -463,7 +459,7 @@
     </div>
   </div>
 
-  <!-- Floating Lightbox Modal for Mobile/PC Zoom -->
+  <!-- Floating Lightbox Modal -->
   <div class="lightbox-modal" id="lightboxModal" onclick="if(event.target.id === 'lightboxModal') closeLightbox()">
     <div class="lightbox-header">
       <span class="lightbox-badge" id="modalDesignBadge">---</span>
@@ -537,7 +533,6 @@
     let cameraTrack = null;
     let isTorchOn = false;
 
-    // Focus keeper
     scanInput.addEventListener('blur', () => {
       setTimeout(() => {
         const isInteracting = document.activeElement.id === 'excelInput' || 
@@ -550,7 +545,6 @@
       }, 150);
     });
 
-    // Auto-fetch raw Excel file on load from repo
     window.addEventListener('DOMContentLoaded', () => {
       fetchAutoFile('Product_receipt.xlsx');
     });
@@ -658,7 +652,7 @@
       scanInput.focus();
     }
 
-    // Hardware Scanner Gun Input logic
+    // Hardware Scanner Gun Input logic (No prefix, gun sends raw merge or variant+tab+lot)
     scanInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault(); 
@@ -670,16 +664,47 @@
       scanTimeout = setTimeout(function() {
         const val = scanInput.value.replace(/[\r\n\t\s]/g, '').trim();
         if (val.length > 0) {
-          processCode(val);
+          processCode(val, false); // isCamera = false
           scanInput.value = ""; 
         }
       }, 150); 
     });
 
-    // Core Matching Engine
-    function processCode(rawText) {
-      const extractedKey = rawText.toUpperCase(); 
+    // LOOKUP & PREFIX STRIPPING LOGIC
+    // isCamera = true will strip the 7-character tag header prefix while preserving the full dynamic lotno
+    function findMatchingItem(rawText, isCamera = false) {
+      let clean = rawText.toUpperCase().replace(/[\r\n\t\s]/g, '');
+
+      // 1. Direct match first (for regular scanner gun or manual entry)
+      if (DB[clean]) return DB[clean];
+
+      // 2. If scanned from mobile camera and has the 7-character header prefix:
+      // Strip exactly the first 7 characters (e.g. H1FDMAI) to leave the 14-digit variant + dynamic lot number
+      if (isCamera && clean.length > 14) {
+        const stripped = clean.substring(7); // Drops the first 7 chars
+        if (DB[stripped]) return DB[stripped];
+      }
+
+      // 3. Fallback: Check if clean text without first 7 chars exists in DB
+      if (clean.length > 21) {
+        const strippedFallback = clean.substring(7);
+        if (DB[strippedFallback]) return DB[strippedFallback];
+      }
+
+      // 4. Fallback search by Lot Number
+      if (LotDB[clean]) return LotDB[clean];
       
+      // 5. Look for any Merge key contained in the scanned string
+      for (const mergeKey in DB) {
+        if (clean.includes(mergeKey)) {
+          return DB[mergeKey];
+        }
+      }
+
+      return null;
+    }
+
+    function processCode(rawText, isCamera = false) {
       const card = document.getElementById('resultCard');
       const statusText = document.getElementById('statusText');
       const productContent = document.getElementById('productContent');
@@ -691,7 +716,7 @@
 
       rawDisplay.innerText = `Full Scanned Code: ${rawText}`;
 
-      const item = DB[extractedKey] || LotDB[extractedKey];
+      const item = findMatchingItem(rawText, isCamera);
 
       if (item) {
         currentMatchedItem = item;
@@ -761,7 +786,6 @@
         html5QrScanner = new Html5Qrcode("cameraReaderView");
       }
 
-      // Configure specifically for QR Code and PDF417 tags with high scan frequency
       const config = {
         fps: 20,
         qrbox: { width: 300, height: 110 },
@@ -781,19 +805,14 @@
           { facingMode: "environment" },
           config,
           (decodedText) => {
-            // When barcode scanned
             if (decodedText) {
-              const cleanCode = decodedText.replace(/[\r\n\t\s]/g, '').trim();
-              processCode(cleanCode);
-              stopMobileCamera(); // Close camera view upon successful scan
+              processCode(decodedText, true); // isCamera = true (strips the 7-digit header)
+              stopMobileCamera();
             }
           },
-          (errorMessage) => {
-            // Ignore frame-by-frame parse misses
-          }
+          (errorMessage) => {}
         );
 
-        // Store video track for autofocus and torch handling
         setTimeout(() => {
           const videoEl = document.querySelector("#cameraReaderView video");
           if (videoEl && videoEl.srcObject) {
@@ -825,7 +844,6 @@
       }
     }
 
-    // Refocus handler when tapping video
     function triggerCameraRefocus() {
       if (cameraTrack && cameraTrack.applyConstraints) {
         cameraTrack.applyConstraints({
@@ -834,7 +852,6 @@
       }
     }
 
-    // Torch / Flashlight toggle
     async function toggleTorch() {
       if (!cameraTrack) return;
       try {
@@ -916,7 +933,6 @@
       `).join('');
     }
 
-    // Export Excel preserving original rows and updating Scanned column
     function exportExcel() {
       if (!uploadedWorkbook) return alert('Dataset is not loaded yet!');
 
@@ -934,7 +950,6 @@
       XLSX.writeFile(uploadedWorkbook, outputName);
     }
 
-    // Modal controls for 2x2 PDF
     function openPDFModal() {
       if (scannedItems.length === 0) return alert('No items verified yet!');
       document.getElementById('pdfModal').classList.add('active');
@@ -961,7 +976,6 @@
       }
     }
 
-    // 2x2 Grid PDF Generator matching South1 layout
     async function generate2x2PDF() {
       const btn = document.getElementById('generatePdfBtn');
       btn.innerText = "⏳ Building PDF...";
